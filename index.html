@@ -51,8 +51,9 @@
             border: 1px solid transparent;
         }
         .btn-sheet { background-color: #ffffff; color: #1d804e; border-color: #1d804e; }
-        .btn-kerja { background-color: #0066ff; color: #fff; }
+        .btn-kerja { background-color: #0066ff; color: #fff; border: none; }
         .btn-cetak { background-color: #ffffff; color: #0066ff; border-color: #e0e0e0; }
+        .btn-cetak:hover { background-color: #f8fafc; border-color: #0066ff; }
 
         /* Layout Utama (Grid) */
         .main-container {
@@ -167,6 +168,11 @@
             border-radius: 4px;
             font-weight: bold;
         }
+
+        /* Sembunyikan elemen dashboard saat mode cetak kertas aktif */
+        @media print {
+            .header, .main-container { display: none !important; }
+        }
     </style>
 </head>
 <body>
@@ -180,6 +186,7 @@
             <a href="https://docs.google.com/spreadsheets/d/1ef_qb9SFri_QlljzrYZJt5sxIBg18IpCAv5eGfOjd1k/edit?usp=sharing" target="_blank" class="btn btn-sheet">📊 Buka Google Sheets</a>
             <button class="btn btn-kerja">Lembar Kerja Absen</button>
             <button class="btn btn-cetak" onclick="prosesCetakDanKirim()">🖨️ Cetak Kartu Pelajar</button>
+        </div>
     </div>
 
     <div class="main-container">
@@ -232,23 +239,63 @@
     </div>
 
 <script>
-    // Taruh URL Google Apps Script Anda di bawah ini
+    // Taruh URL Web App Google Apps Script Anda di sini
     const WEB_APP_URL = "PASANG_URL_WEB_APP_ANDA_DISINI"; 
     let nomorUrut = 1;
+    let dataSiswaTerakhir = null; // Menyimpan data scan terakhir untuk dicetak otomatis
 
+    // FUNGSI UTAMA: Memicu Cetak Printer, Update Sheets & Kirim WA
+    function prosesCetakDanKirim() {
+        // Data default jika tombol diklik langsung tanpa scan kartu terlebih dahulu
+        let dataCetak = dataSiswaTerakhir || {
+            nis: "2026001",
+            nama: "Budi Prasetyo (Uji Coba)",
+            ortu: "6281234567890" // Ganti dengan nomor asli untuk tes kirim WA
+        };
+
+        document.getElementById('status-loading').innerText = "Memproses Cetak & Notifikasi WA...";
+        document.getElementById('status-loading').style.display = 'block';
+
+        // 1. Kirim instruksi ke Google Sheets & API WhatsApp Backend
+        fetch(WEB_APP_URL, {
+            method: "POST",
+            body: JSON.stringify(dataCetak),
+            headers: { "Content-Type": "text/plain;charset=utf-8" }
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('status-loading').style.display = 'none';
+            if(data.result === "success") {
+                // Update log lokal di tabel
+                tambahKeTabelLog(dataCetak.nis, dataCetak.nama, "CETAK KARTU");
+                
+                // 2. Buka jendela dialog cetak printer bawaan komputer secara otomatis
+                window.print(); 
+            } else {
+                alert("Sistem gagal mencatat, namun Anda tetap dialihkan ke menu cetak printer.");
+                window.print();
+            }
+        })
+        .catch(error => {
+            document.getElementById('status-loading').style.display = 'none';
+            console.error("Error:", error);
+            // Tetap izinkan cetak offline jika internet mati
+            window.print(); 
+        });
+    }
+
+    // Fungsi membaca Kamera QR Code
     function onScanSuccess(decodedText, decodedResult) {
-        // Matikan scanner sejenak saat memproses agar tidak ganda
         html5QrcodeScanner.clear();
-        
+        document.getElementById('status-loading').innerText = "Mengirim data & WA...";
         document.getElementById('status-loading').style.display = 'block';
         let statusTerpilih = document.getElementById('status-input').value;
 
         try {
-            // Asumsi isi QR Code berupa JSON: {"nis": "1234", "nama": "Budi", "ortu": "628xxx"}
             let dataSiswa = JSON.parse(decodedText);
-            dataSiswa.status = statusTerpilih; // Tambahkan status dari dropdown dashboard
+            dataSiswa.status = statusTerpilih;
+            dataSiswaTerakhir = dataSiswa; // Simpan ke memori agar bisa dicetak otomatis nanti jika tombol cetak diklik
 
-            // Kirim ke Google Apps Script backend
             fetch(WEB_APP_URL, {
                 method: "POST",
                 body: JSON.stringify(dataSiswa),
@@ -259,16 +306,14 @@
                 document.getElementById('status-loading').style.display = 'none';
                 if(data.result === "success") {
                     document.getElementById('status-success').style.display = 'block';
-                    
-                    // Update Log Tabel secara Real-time di layar komputer Anda
                     tambahKeTabelLog(dataSiswa.nis, dataSiswa.nama, statusTerpilih);
 
                     setTimeout(() => {
                         document.getElementById('status-success').style.display = 'none';
-                        startScanner(); // Jalankan scanner lagi untuk antrean berikutnya
+                        startScanner(); 
                     }, 2500);
                 } else {
-                    alert("Gagal menyimpan ke Google Sheets: " + data.error);
+                    alert("Gagal menyimpan data: " + data.error);
                     startScanner();
                 }
             })
@@ -279,7 +324,7 @@
             });
 
         } catch (e) {
-            alert("QR Code tidak valid!");
+            alert("Format Kartu QR tidak dikenali.");
             startScanner();
         }
     }
@@ -287,7 +332,7 @@
     function tambahKeTabelLog(nis, nama, status) {
         const tbody = document.getElementById('log-body');
         const emptyMsg = document.getElementById('empty-message');
-        if (emptyMsg) emptyMsg.remove(); // Hapus pesan 'belum ada data'
+        if (emptyMsg) emptyMsg.remove();
 
         let waktuSekarang = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + " WIB";
 
@@ -296,18 +341,17 @@
             <td>${waktuSekarang}</td>
             <td>${nis}</td>
             <td>${nama}</td>
-            <td><span class="badge-hadir">${status}</span></td>
+            <td><span class="badge-hadir" style="${status === 'CETAK KARTU' ? 'background-color:#ebf8ff; color:#2b6cb0;' : ''}">${status}</span></td>
         </tr>`;
 
-        tbody.insertAdjacentHTML('afterbegin', barisBaru); // Data terbaru muncul paling atas
+        tbody.insertAdjacentHTML('afterbegin', barisBaru); 
         document.getElementById('total-siswa').innerText = nomorUrut - 1;
     }
 
     function startScanner() {
-        html5QrcodeScanner.render(onScanSuccess, (error) => { /* abaikan error pencarian */ });
+        html5QrcodeScanner.render(onScanSuccess, (error) => {});
     }
 
-    // Konfigurasi Inisiasi Kamera bawaan library html5-qrcode
     let html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
         fps: 15, 
         qrbox: { width: 220, height: 220 },
