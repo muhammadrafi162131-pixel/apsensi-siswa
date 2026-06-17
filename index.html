@@ -3,83 +3,257 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Scan Presensi Siswa</title>
+    <title>Sistem Terpadu Absensi & Kartu QR</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f6f9;
+        * {
+            box-sizing: border-box;
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background-color: #f4f6f9;
+            color: #333;
+        }
+        /* Header Dashboard */
+        .header {
+            background-color: #ffffff;
+            padding: 15px 30px;
+            border-bottom: 1px solid #e0e0e0;
             display: flex;
-            flex-direction: column;
+            justify-content: space-between;
             align-items: center;
         }
-        .container {
-            max-width: 500px;
-            width: 100%;
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            text-align: center;
+        .brand h2 {
+            color: #0066ff;
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
+        .brand p {
+            font-size: 12px;
+            color: #777;
+            margin-top: 3px;
+        }
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 5px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            border: 1px solid transparent;
+        }
+        .btn-sheet { background-color: #ffffff; color: #1d804e; border-color: #1d804e; }
+        .btn-kerja { background-color: #0066ff; color: #fff; }
+        .btn-cetak { background-color: #ffffff; color: #0066ff; border-color: #e0e0e0; }
+
+        /* Layout Utama (Grid) */
+        .main-container {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 20px;
+            padding: 25px 30px;
+        }
+        .card {
+            background: #ffffff;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            padding: 20px;
+        }
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #4a5568;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Form / Control Panel */
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            color: #718096;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        .select-status {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #0066ff;
+            background-color: #f8fafc;
+        }
+
+        /* Scanner Area */
         #reader {
             width: 100%;
-            border-radius: 8px;
+            border: 2px dashed #cbd5e0;
+            border-radius: 6px;
             overflow: hidden;
-            background: #222;
+            background: #fff;
         }
-        .status {
-            margin-top: 15px;
+        
+        /* Status Alerts */
+        .status-msg {
             padding: 10px;
-            font-weight: bold;
-            border-radius: 5px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-top: 10px;
+            display: none;
+            text-align: center;
         }
-        .loading { background-color: #ffeeba; color: #856404; display: none; }
-        .success { background-color: #d4edda; color: #155724; display: none; }
+        .loading { background-color: #fffaf0; color: #dd6b20; border: 1px solid #fbd38d; }
+        .success { background-color: #f0fff4; color: #38a169; border: 1px solid #9ae6b4; }
+
+        /* Tabel Log Aktivitas */
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .total-badge {
+            background-color: #f1f5f9;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid #e2e8f0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+        }
+        th {
+            background-color: #f8fafc;
+            color: #4a5568;
+            font-weight: 600;
+            padding: 12px 10px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #edf2f7;
+            color: #4a5568;
+        }
+        .empty-row {
+            text-align: center;
+            color: #a0aec0;
+            padding: 40px 0;
+        }
+        .badge-hadir {
+            background-color: #e6fffa;
+            color: #319795;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Scan QR Code Absensi</h2>
-    <p>Arahkan kode QR Siswa ke kamera</p>
-    
-    <div id="reader"></div>
-    
-    <div id="status-loading" class="status loading">Memproses data & mengirim WhatsApp...</div>
-    <div id="status-success" class="status success">Absensi Berhasil Dicatat!</div>
-</div>
+    <div class="header">
+        <div class="brand">
+            <h2>█ Sistem Terpadu Absensi & Kartu QR</h2>
+            <p>Kelola absensi real-time WhatsApp dan cetak kartu pelajar mandiri.</p>
+        </div>
+        <div class="header-buttons">
+            <a href="https://docs.google.com/spreadsheets/d/1ef_qb9SFri_QlljzrYZJt5sxIBg18IpCAv5eGfOjd1k/edit?usp=sharing" target="_blank" class="btn btn-sheet">📊 Buka Google Sheets</a>
+            <button class="btn btn-kerja">Lembar Kerja Absen</button>
+            <button class="btn btn-cetak">Cetak Kartu Pelajar</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        
+        <div class="card">
+            <div class="card-title">⚙️ Control Panel</div>
+            
+            <div class="form-group">
+                <label>Status Input</label>
+                <select id="status-input" class="select-status">
+                    <option value="HADIR">🟢 HADIR</option>
+                    <option value="TERLAMBAT">🟡 TERLAMBAT</option>
+                    <option value="IZIN">🔵 IZIN</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Kamera Scanner</label>
+                <div id="reader"></div>
+            </div>
+
+            <div id="status-loading" class="status-msg loading">Mengirim data & WA...</div>
+            <div id="status-success" class="status-msg success">Berhasil Dicatat!</div>
+        </div>
+
+        <div class="card">
+            <div class="table-header">
+                <div class="card-title" style="margin-bottom:0;">📋 Log Aktivitas Masuk</div>
+                <div class="total-badge">Total: <span id="total-siswa">0</span> Siswa</div>
+            </div>
+
+            <table id="log-table">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">No</th>
+                        <th>Waktu Scan</th>
+                        <th>NIS</th>
+                        <th>Nama Siswa</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="log-body">
+                    <tr id="empty-message">
+                        <td colspan="5" class="empty-row">Belum ada data masuk. Silakan scan kartu.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
 
 <script>
-    // URL Web App dari Google Apps Script yang sudah Anda Deploy tadi
+    // Taruh URL Google Apps Script Anda di bawah ini
     const WEB_APP_URL = "PASANG_URL_WEB_APP_ANDA_DISINI"; 
+    let nomorUrut = 1;
 
     function onScanSuccess(decodedText, decodedResult) {
-        // Hentikan scanner sementara agar tidak scan berkali-kali
+        // Matikan scanner sejenak saat memproses agar tidak ganda
         html5QrcodeScanner.clear();
         
         document.getElementById('status-loading').style.display = 'block';
+        let statusTerpilih = document.getElementById('status-input').value;
 
-        /* ASUMSI ISI QR CODE ADALAH FORMAT JSON SEPERTI INI:
-          {
-            "nis": "12345",
-            "nama": "Budi Santoso",
-            "ortu": "6281234567890",
-            "status": "Hadir"
-          }
-        */
         try {
+            // Asumsi isi QR Code berupa JSON: {"nis": "1234", "nama": "Budi", "ortu": "628xxx"}
             let dataSiswa = JSON.parse(decodedText);
+            dataSiswa.status = statusTerpilih; // Tambahkan status dari dropdown dashboard
 
-            // Mengirim data ke Google Sheets & WhatsApp melalui Google Apps Script
+            // Kirim ke Google Apps Script backend
             fetch(WEB_APP_URL, {
                 method: "POST",
                 body: JSON.stringify(dataSiswa),
-                headers: {
-                    "Content-Type": "text/plain;charset=utf-8"
-                }
+                headers: { "Content-Type": "text/plain;charset=utf-8" }
             })
             .then(response => response.json())
             .then(data => {
@@ -87,39 +261,61 @@
                 if(data.result === "success") {
                     document.getElementById('status-success').style.display = 'block';
                     
-                    // Nyalakan kembali scanner setelah 3 detik untuk siswa berikutnya
+                    // Update Log Tabel secara Real-time di layar komputer Anda
+                    tambahKeTabelLog(dataSiswa.nis, dataSiswa.nama, statusTerpilih);
+
                     setTimeout(() => {
                         document.getElementById('status-success').style.display = 'none';
-                        renderScanner();
-                    }, 3000);
+                        startScanner(); // Jalankan scanner lagi untuk antrean berikutnya
+                    }, 2500);
                 } else {
-                    alert("Gagal mencatat data: " + data.error);
-                    renderScanner();
+                    alert("Gagal menyimpan ke Google Sheets: " + data.error);
+                    startScanner();
                 }
             })
             .catch(error => {
                 document.getElementById('status-loading').style.display = 'none';
-                alert("Terjadi kesalahan jaringan/sistem.");
-                renderScanner();
+                alert("Koneksi internet bermasalah.");
+                startScanner();
             });
 
         } catch (e) {
-            alert("Format QR Code salah / Tidak dikenali.");
-            renderScanner();
+            alert("QR Code tidak valid!");
+            startScanner();
         }
     }
 
-    function onScanFailure(error) {
-        // Abaikan error scan gagal (kamera sedang mencari QR)
+    function tambahKeTabelLog(nis, nama, status) {
+        const tbody = document.getElementById('log-body');
+        const emptyMsg = document.getElementById('empty-message');
+        if (emptyMsg) emptyMsg.remove(); // Hapus pesan 'belum ada data'
+
+        let waktuSekarang = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + " WIB";
+
+        let barisBaru = `<tr>
+            <td>${nomorUrut++}</td>
+            <td>${waktuSekarang}</td>
+            <td>${nis}</td>
+            <td>${nama}</td>
+            <td><span class="badge-hadir">${status}</span></td>
+        </tr>`;
+
+        tbody.insertAdjacentHTML('afterbegin', barisBaru); // Data terbaru muncul paling atas
+        document.getElementById('total-siswa').innerText = nomorUrut - 1;
     }
 
-    function renderScanner() {
-        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    function startScanner() {
+        html5QrcodeScanner.render(onScanSuccess, (error) => { /* abaikan error pencarian */ });
     }
 
-    // Menjalankan Scanner pertama kali
-    let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-    renderScanner();
+    // Konfigurasi Inisiasi Kamera bawaan library html5-qrcode
+    let html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+        fps: 15, 
+        qrbox: { width: 220, height: 220 },
+        rememberLastUsedCamera: true
+    });
+    
+    startScanner();
 </script>
 
 </body>
