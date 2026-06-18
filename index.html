@@ -104,38 +104,15 @@
             background-color: #f8fafc;
         }
 
-        /* HP Scanner Wrapper */
-        .scanner-container {
-            position: relative;
-            width: 100%;
-            background: #222;
-            border-radius: 8px;
-            overflow: hidden;
-            border: 2px solid #cbd5e0;
-        }
+        /* Scanner Area Sederhana */
         #reader {
             width: 100%;
-            aspect-ratio: 1 / 1;
-            background: #000;
-        }
-        .camera-controls {
-            padding: 10px;
-            background: #f8fafc;
-            border-top: 1px solid #cbd5e0;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .btn-cam {
-            width: 100%;
-            padding: 10px;
-            font-size: 13px;
-            font-weight: bold;
+            border: 2px dashed #0066ff;
             border-radius: 6px;
-            cursor: pointer;
-            border: 1px solid #cbd5e0;
+            overflow: hidden;
+            background: #fafafa;
+            padding: 10px;
         }
-        .btn-switch { background-color: #0066ff; color: #fff; border: none; }
         
         /* Status Alerts */
         .status-msg {
@@ -210,6 +187,7 @@
             font-weight: 600;
         }
 
+        /* Bagian Bawah Wadah Excel */
         .download-footer-area {
             display: flex;
             justify-content: flex-end;
@@ -275,15 +253,7 @@
 
             <div class="form-group">
                 <label>Kamera Scanner</label>
-                <div class="scanner-container">
-                    <div id="reader"></div>
-                    <div class="camera-controls">
-                        <select id="cam-list" class="select-status" style="font-size:12px; padding:6px; color:#333; margin-bottom:2px;">
-                            <option value="">Menunggu izin kamera...</option>
-                        </select>
-                        <button type="button" class="btn-cam btn-switch" onclick="switchKamera()">🔄 Ganti Kamera / Start</button>
-                    </div>
-                </div>
+                <div id="reader"></div>
             </div>
 
             <div id="status-loading" class="status-msg loading">Mengirim data & WA...</div>
@@ -328,116 +298,23 @@
 
     let nomorUrut = 1;
     let dataSiswaTerakhir = null; 
-    let isProcessing = false; 
     let listSiswaHariIni = []; 
 
-    let html5QrCode = null;
-    let daftarKamera = [];
-    let indeksKameraAktif = 0;
+    // ENGINE VERSI BAWAAN HP (Sangat Stabil di HP tipe apapun)
+    let html5QrcodeScanner = null;
 
     document.addEventListener("DOMContentLoaded", function() {
-        html5QrCode = new Html5QrCode("reader");
-        // Minta izin kamera secara eksplisit terlebih dahulu
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then(stream => {
-                // Hentikan stream sementara untuk dipakai oleh library
-                stream.getTracks().forEach(track => track.stop());
-                initKamera();
-            })
-            .catch(err => {
-                document.getElementById('cam-list').innerHTML = "<option>Akses kamera diblokir browser</option>";
-                alert("PENTING: Mohon izinkan akses kamera pada setelan browser HP Anda.");
-            });
+        // Menggunakan settingan bawaan html5-qrcode yang otomatis memunculkan tombol pilih kamera dari browser HP
+        html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+            fps: 10, 
+            qrbox: { width: 200, height: 200 },
+            rememberLastUsedCamera: true,
+            supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+        });
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
     });
 
-    function initKamera() {
-        Html5Qrcode.getCameras().then(devices => {
-            if (devices && devices.length > 0) {
-                daftarKamera = devices;
-                const camListSelect = document.getElementById('cam-list');
-                camListSelect.innerHTML = "";
-                
-                let targetIndex = 0;
-                devices.forEach((device, index) => {
-                    let option = document.createElement('option');
-                    option.value = device.id;
-                    option.text = device.label || `Kamera ${index + 1}`;
-                    camListSelect.appendChild(option);
-
-                    // Prioritaskan kamera belakang HP
-                    if (device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('belakang') || device.label.toLowerCase().includes('environment')) {
-                        targetIndex = index;
-                    }
-                });
-
-                indeksKameraAktif = targetIndex;
-                camListSelect.selectedIndex = targetIndex;
-                startScanner(devices[targetIndex].id);
-            } else {
-                alert("Kamera tidak ditemukan.");
-            }
-        }).catch(err => {
-            alert("Gagal memuat perangkat kamera.");
-        });
-    }
-
-    function startScanner(cameraId) {
-        let qrBoxSize = window.innerWidth < 600 ? 180 : 230;
-
-        html5QrCode.start(
-            cameraId, 
-            { fps: 10, qrbox: { width: qrBoxSize, height: qrBoxSize } },
-            onScanSuccess,
-            (errorMessage) => {}
-        ).catch(err => {
-            console.log("Kamera gagal dimulai.");
-        });
-    }
-
-    function switchKamera() {
-        if (!html5QrCode) return;
-        const camListSelect = document.getElementById('cam-list');
-        
-        html5QrCode.stop().then(() => {
-            let selectedId = camListSelect.value;
-            if(selectedId) {
-                startScanner(selectedId);
-            } else {
-                indeksKameraAktif = (indeksKameraAktif + 1) % daftarKamera.length;
-                camListSelect.selectedIndex = indeksKameraAktif;
-                startScanner(daftarKamera[indeksKameraAktif].id);
-            }
-        }).catch(err => {
-            startScanner(camListSelect.value || daftarKamera[0].id);
-        });
-    }
-
-    function prosesCetakDanKirim() {
-        let dataCetak = dataSiswaTerakhir || { nis: "2026001", nama: "Budi Prasetyo (Uji Coba)", ortu: "6281234567890" };
-        document.getElementById('status-loading').innerText = "Memproses Cetak & Notifikasi WA...";
-        document.getElementById('status-loading').style.display = 'block';
-
-        fetch(WEB_APP_URL, {
-            method: "POST",
-            body: JSON.stringify(dataCetak),
-            headers: { "Content-Type": "text/plain;charset=utf-8" }
-        })
-        .then(response => {
-            document.getElementById('status-loading').style.display = 'none';
-            tambahKeTabelLog(dataCetak.waktu || "Baru", dataCetak.nis, dataCetak.nama, "CETAK KARTU");
-            window.print(); 
-        })
-        .catch(error => {
-            document.getElementById('status-loading').style.display = 'none';
-            tambahKeTabelLog(dataCetak.waktu || "Baru", dataCetak.nis, dataCetak.nama, "CETAK KARTU (OFFLINE)");
-            window.print(); 
-        });
-    }
-
     function onScanSuccess(decodedText, decodedResult) {
-        if (isProcessing) return; 
-        isProcessing = true; 
-        
         let statusTerpilih = document.getElementById('status-input').value;
         let dataFinal = { waktu: "", nis: "", nama: "", status: statusTerpilih, ortu: "" };
 
@@ -470,12 +347,36 @@
             headers: { "Content-Type": "text/plain;charset=utf-8" }
         })
         .then(response => response.json())
-        .catch(error => { console.log("Log lokal tersimpan."); });
+        .catch(error => { console.log("Tersimpan di tabel."); });
 
         setTimeout(() => {
             document.getElementById('status-success').style.display = 'none';
-            isProcessing = false; 
-        }, 3000); 
+        }, 2000);
+    }
+
+    function onScanFailure(error) {
+        // Abaikan kegagalan baca antar-frame untuk menjaga performa HP tetap dingin
+    }
+
+    function prosesCetakDanKirim() {
+        let dataCetak = dataSiswaTerakhir || { nis: "2026001", nama: "Budi Prasetyo (Uji Coba)", ortu: "6281234567890" };
+        document.getElementById('status-loading').innerText = "Memproses Cetak...";
+        document.getElementById('status-loading').style.display = 'block';
+
+        fetch(WEB_APP_URL, {
+            method: "POST",
+            body: JSON.stringify(dataCetak),
+            headers: { "Content-Type": "text/plain;charset=utf-8" }
+        })
+        .then(response => {
+            document.getElementById('status-loading').style.display = 'none';
+            tambahKeTabelLog(dataCetak.waktu || "Baru", dataCetak.nis, dataCetak.nama, "CETAK KARTU");
+            window.print(); 
+        })
+        .catch(error => {
+            document.getElementById('status-loading').style.display = 'none';
+            window.print(); 
+        });
     }
 
     function tambahKeTabelLog(waktu, nis, nama, status) {
