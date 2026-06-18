@@ -187,7 +187,6 @@
             font-weight: 600;
         }
 
-        /* Bagian Bawah Wadah Excel */
         .download-footer-area {
             display: flex;
             justify-content: flex-end;
@@ -272,8 +271,8 @@
                         <tr>
                             <th style="width: 50px;">No</th>
                             <th>Waktu Scan</th>
-                            <th>NIS</th>
                             <th>Nama Siswa</th>
+                            <th>Jurusan</th>
                             <th>Status</th>
                             <th style="width: 90px;">Aksi</th>
                         </tr>
@@ -300,11 +299,9 @@
     let dataSiswaTerakhir = null; 
     let listSiswaHariIni = []; 
 
-    // ENGINE VERSI BAWAAN HP (Sangat Stabil di HP tipe apapun)
     let html5QrcodeScanner = null;
 
     document.addEventListener("DOMContentLoaded", function() {
-        // Menggunakan settingan bawaan html5-qrcode yang otomatis memunculkan tombol pilih kamera dari browser HP
         html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
             fps: 10, 
             qrbox: { width: 200, height: 200 },
@@ -316,7 +313,7 @@
 
     function onScanSuccess(decodedText, decodedResult) {
         let statusTerpilih = document.getElementById('status-input').value;
-        let dataFinal = { waktu: "", nis: "", nama: "", status: statusTerpilih, ortu: "" };
+        let dataFinal = { waktu: "", jurusan: "", nama: "", status: statusTerpilih, ortu: "" };
 
         document.getElementById('status-loading').innerText = "Mengirim data & WA...";
         document.getElementById('status-loading').style.display = 'block';
@@ -326,21 +323,23 @@
 
         try {
             let dataSiswa = JSON.parse(decodedText);
-            dataFinal.nis = (dataSiswa.nis || dataSiswa.NIS || "QR-" + Math.floor(1000 + Math.random() * 9000)).toString();
+            // Membaca properti 'jurusan', 'JURUSAN', 'nis', atau 'nisn' dari QR lama sebagai fallback
+            dataFinal.jurusan = (dataSiswa.jurusan || dataSiswa.JURUSAN || dataSiswa.nis || dataSiswa.nisn || dataSiswa.NIS || "-").toString();
             dataFinal.nama = (dataSiswa.nama || dataSiswa.NAMA || decodedText).toString();
             dataFinal.ortu = (dataSiswa.ortu || dataSiswa.ORTU || "").toString();
         } catch (e) {
-            dataFinal.nis = "QR-" + Math.floor(1000 + Math.random() * 9000);
+            dataFinal.jurusan = "-";
             dataFinal.nama = decodedText.trim() || "Siswa Tanpa Nama";
         }
 
         dataSiswaTerakhir = dataFinal; 
         listSiswaHariIni.push(dataFinal); 
 
-        tambahKeTabelLog(dataFinal.waktu, dataFinal.nis, dataFinal.nama, statusTerpilih);
+        tambahKeTabelLog(dataFinal.waktu, dataFinal.nama, dataFinal.jurusan, statusTerpilih);
         document.getElementById('status-loading').style.display = 'none';
         document.getElementById('status-success').style.display = 'block';
 
+        // Mengirimkan objek dataFinal (termasuk properti jurusan) ke Google Apps Script backend
         fetch(WEB_APP_URL, {
             method: "POST",
             body: JSON.stringify(dataFinal),
@@ -354,12 +353,10 @@
         }, 2000);
     }
 
-    function onScanFailure(error) {
-        // Abaikan kegagalan baca antar-frame untuk menjaga performa HP tetap dingin
-    }
+    function onScanFailure(error) {}
 
     function prosesCetakDanKirim() {
-        let dataCetak = dataSiswaTerakhir || { nis: "2026001", nama: "Budi Prasetyo (Uji Coba)", ortu: "6281234567890" };
+        let dataCetak = dataSiswaTerakhir || { jurusan: "TKJ", nama: "Budi Prasetyo (Uji Coba)", ortu: "6281234567890" };
         document.getElementById('status-loading').innerText = "Memproses Cetak...";
         document.getElementById('status-loading').style.display = 'block';
 
@@ -370,7 +367,7 @@
         })
         .then(response => {
             document.getElementById('status-loading').style.display = 'none';
-            tambahKeTabelLog(dataCetak.waktu || "Baru", dataCetak.nis, dataCetak.nama, "CETAK KARTU");
+            tambahKeTabelLog(dataCetak.waktu || "Baru", dataCetak.nama, dataCetak.jurusan, "CETAK KARTU");
             window.print(); 
         })
         .catch(error => {
@@ -379,36 +376,37 @@
         });
     }
 
-    function tambahKeTabelLog(waktu, nis, nama, status) {
+    function tambahKeTabelLog(waktu, nama, jurusan, status) {
         const tbody = document.getElementById('log-body');
         const emptyMsg = document.getElementById('empty-message');
         if (emptyMsg) emptyMsg.remove();
 
         let namaEscaped = nama.replace(/'/g, "\\'");
+        let jurusanEscaped = jurusan.replace(/'/g, "\\'");
 
         let barisBaru = `<tr>
             <td>${nomorUrut++}</td>
             <td>${waktu}</td>
-            <td>${nis}</td>
             <td>${nama}</td>
+            <td>${jurusan}</td>
             <td><span class="badge-hadir" style="${status.includes('CETAK') ? 'background-color:#ebf8ff; color:#2b6cb0;' : ''}">${status}</span></td>
-            <td><button class="btn-export-single" onclick="exportDataSiswaKeExcel('${waktu}', '${nis}', '${namaEscaped}', '${status}')">📥 Excel</button></td>
+            <td><button class="btn-export-single" onclick="exportDataSiswaKeExcel('${waktu}', '${namaEscaped}', '${jurusanEscaped}', '${status}')">📥 Excel</button></td>
         </tr>`;
 
         tbody.insertAdjacentHTML('afterbegin', barisBaru); 
         document.getElementById('total-siswa').innerText = listSiswaHariIni.length;
     }
 
-    function exportDataSiswaKeExcel(waktu, nis, nama, status) {
+    function exportDataSiswaKeExcel(waktu, nama, jurusan, status) {
         let htmlTemplate = `
             <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
             <body>
                 <table border="1">
                     <tr style="background-color: #0066ff; color: #ffffff; font-weight: bold;">
-                        <th>Waktu Scan</th><th>NIS</th><th>Nama Siswa</th><th>Status</th>
+                        <th>Waktu Scan</th><th>Nama Siswa</th><th>Jurusan</th><th>Status</th>
                     </tr>
                     <tr>
-                        <td>${waktu}</td><td>'${nis}</td><td>${nama}</td><td>${status}</td>
+                        <td>${waktu}</td><td>${nama}</td><td>${jurusan}</td><td>${status}</td>
                     </tr>
                 </table>
             </body>
@@ -418,7 +416,7 @@
         let url = URL.createObjectURL(blob);
         let a = document.createElement("a");
         a.href = url;
-        a.download = `Absen_${nis}_${nama.replace(/[^a-zA-Z0-9]/g, "_")}.xls`;
+        a.download = `Absen_${jurusan}_${nama.replace(/[^a-zA-Z0-9]/g, "_")}.xls`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -438,7 +436,7 @@
                 <table border="1">
                     <thead>
                         <tr style="background-color: #0066ff; color: #ffffff; font-weight: bold; text-align: center;">
-                            <th>No</th><th>Waktu Scan</th><th>NIS</th><th>Nama Lengkap Siswa</th><th>Status Kehadiran</th>
+                            <th>No</th><th>Waktu Scan</th><th>Nama Lengkap Siswa</th><th>Jurusan</th><th>Status Kehadiran</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -448,7 +446,7 @@
             htmlTemplate += `
                 <tr>
                     <td style="text-align: center;">${index + 1}</td>
-                    <td>${siswa.waktu}</td><td>'${siswa.nis}</td><td>${siswa.nama}</td><td style="text-align: center; font-weight: bold;">${siswa.status}</td>
+                    <td>${siswa.waktu}</td><td>${siswa.nama}</td><td>${siswa.jurusan}</td><td style="text-align: center; font-weight: bold;">${siswa.status}</td>
                 </tr>
             `;
         });
