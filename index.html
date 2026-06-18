@@ -55,7 +55,7 @@
         .btn-cetak { background-color: #ffffff; color: #0066ff; border-color: #e0e0e0; }
         .btn-cetak:hover { background-color: #f8fafc; border-color: #0066ff; }
 
-        /* Layout Utama (Grid & Responsive HP) */
+        /* Layout Utama (Grid) */
         .main-container {
             display: grid;
             grid-template-columns: 350px 1fr;
@@ -104,14 +104,38 @@
             background-color: #f8fafc;
         }
 
-        /* Scanner Area */
+        /* HP Scanner Wrapper */
+        .scanner-container {
+            position: relative;
+            width: 100%;
+            background: #222;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid #cbd5e0;
+        }
         #reader {
             width: 100%;
-            border: 2px dashed #cbd5e0;
-            border-radius: 6px;
-            overflow: hidden;
-            background: #fff;
+            aspect-ratio: 1 / 1;
+            background: #000;
         }
+        .camera-controls {
+            padding: 10px;
+            background: #f8fafc;
+            border-top: 1px solid #cbd5e0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .btn-cam {
+            width: 100%;
+            padding: 10px;
+            font-size: 13px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 1px solid #cbd5e0;
+        }
+        .btn-switch { background-color: #0066ff; color: #fff; border: none; }
         
         /* Status Alerts */
         .status-msg {
@@ -186,7 +210,6 @@
             font-weight: 600;
         }
 
-        /* Footer Tombol Download Excel */
         .download-footer-area {
             display: flex;
             justify-content: flex-end;
@@ -209,28 +232,12 @@
             box-shadow: 0 4px 6px rgba(29, 128, 78, 0.15);
         }
 
-        /* MEDIA QUERY: Optimasi Tampilan Otomatis saat dibuka di HP */
+        /* Responsive Layout HP */
         @media (max-width: 768px) {
-            .header {
-                flex-direction: column;
-                gap: 15px;
-                text-align: center;
-                padding: 15px;
-            }
-            .header-buttons {
-                width: 100%;
-                justify-content: center;
-                flex-wrap: wrap;
-            }
-            .main-container {
-                grid-template-columns: 1fr; /* Mengubah susunan menjadi satu kolom ke bawah di HP */
-                padding: 15px;
-                gap: 15px;
-            }
-            .btn-download-excel-all {
-                width: 100%;
-                justify-content: center;
-            }
+            .header { flex-direction: column; gap: 15px; text-align: center; padding: 15px; }
+            .header-buttons { width: 100%; justify-content: center; flex-wrap: wrap; }
+            .main-container { grid-template-columns: 1fr; padding: 15px; gap: 15px; }
+            .btn-download-excel-all { width: 100%; justify-content: center; }
         }
 
         @media print {
@@ -268,7 +275,15 @@
 
             <div class="form-group">
                 <label>Kamera Scanner</label>
-                <div id="reader"></div>
+                <div class="scanner-container">
+                    <div id="reader"></div>
+                    <div class="camera-controls">
+                        <select id="cam-list" class="select-status" style="font-size:12px; padding:6px; color:#333; margin-bottom:2px;">
+                            <option value="">Memuat daftar kamera...</option>
+                        </select>
+                        <button type="button" class="btn-cam btn-switch" onclick="switchKamera()">🔄 Ganti Kamera / Start</button>
+                    </div>
+                </div>
             </div>
 
             <div id="status-loading" class="status-msg loading">Mengirim data & WA...</div>
@@ -309,12 +324,91 @@
     </div>
 
 <script>
+    // Link API Web App Google Apps Script Anda yang aktif
     const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby4oGGu1BoicT1NIM2AzUpibSMpFIOPgoDX5Qg7X_z_/exec"; 
 
     let nomorUrut = 1;
     let dataSiswaTerakhir = null; 
-    let isProcessing = false; // Kunci anti-double-scan untuk HP
+    let isProcessing = false; 
     let listSiswaHariIni = []; 
+
+    let html5QrCode = null;
+    let daftarKamera = [];
+    let indeksKameraAktif = 0;
+
+    // Inisialisasi Scanner saat halaman dimuat
+    document.addEventListener("DOMContentLoaded", function() {
+        html5QrCode = new Html5QrCode("reader");
+        initKamera();
+    });
+
+    function initKamera() {
+        Html5Qrcode.getCameras().then(devices => {
+            if (devices && devices.length > 0) {
+                daftarKamera = devices;
+                const camListSelect = document.getElementById('cam-list');
+                camListSelect.innerHTML = "";
+                
+                // Cari index kamera belakang (environment back) secara otomatis
+                let targetIndex = 0;
+                devices.forEach((device, index) => {
+                    let option = document.createElement('option');
+                    option.value = device.id;
+                    option.text = device.label || `Kamera ${index + 1}`;
+                    camListSelect.appendChild(option);
+
+                    if (device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('belakang') || device.label.toLowerCase().includes('environment')) {
+                        targetIndex = index;
+                    }
+                });
+
+                indeksKameraAktif = targetIndex;
+                camListSelect.selectedIndex = targetIndex;
+                
+                // Jalankan kamera langsung
+                startScanner(devices[targetIndex].id);
+            } else {
+                alert("Kamera tidak terdeteksi di perangkat ini.");
+            }
+        }).catch(err => {
+            alert("Gagal memuat izin kamera. Pastikan situs diizinkan mengakses kamera di pengaturan browser HP Anda.");
+        });
+    }
+
+    function startScanner(cameraId) {
+        let qrBoxSize = window.innerWidth < 600 ? 180 : 230;
+
+        html5QrCode.start(
+            cameraId, 
+            { fps: 10, qrbox: { width: qrBoxSize, height: qrBoxSize } },
+            onScanSuccess,
+            (errorMessage) => {}
+        ).catch(err => {
+            console.log("Gagal menyalakan kamera pilihan.");
+        });
+    }
+
+    function switchKamera() {
+        if (!html5QrCode) return;
+
+        const camListSelect = document.getElementById('cam-list');
+        
+        html5QrCode.stop().then(() => {
+            // Jika dipicu manual dari dropdown
+            let selectedId = camListSelect.value;
+            if(selectedId) {
+                startScanner(selectedId);
+            } else {
+                // Berganti bergilir otomatis
+                indeksKameraAktif = (indeksKameraAktif + 1) % daftarKamera.length;
+                camListSelect.selectedIndex = indeksKameraAktif;
+                startScanner(daftarKamera[indeksKameraAktif].id);
+            }
+        }).catch(err => {
+            // Jika posisi kamera sedang mati/error, paksa jalankan ulang
+            startScanner(camListSelect.value || daftarKamera[0].id);
+        });
+    }
 
     function prosesCetakDanKirim() {
         let dataCetak = dataSiswaTerakhir || { nis: "2026001", nama: "Budi Prasetyo (Uji Coba)", ortu: "6281234567890" };
@@ -338,9 +432,8 @@
         });
     }
 
-    // FUNGSI SCAN BARU: Halus dan lancar di HP Android & iOS
     function onScanSuccess(decodedText, decodedResult) {
-        if (isProcessing) return; // Jika sedang memproses data, abaikan hasil scan berikutnya sementara waktu
+        if (isProcessing) return; 
         isProcessing = true; 
         
         let statusTerpilih = document.getElementById('status-input').value;
@@ -358,7 +451,6 @@
             dataFinal.nama = (dataSiswa.nama || dataSiswa.NAMA || decodedText).toString();
             dataFinal.ortu = (dataSiswa.ortu || dataSiswa.ORTU || "").toString();
         } catch (e) {
-            // Toleransi jika QR Code berisi teks biasa (bukan database JSON) agar HP tidak crash/muncul alert error
             dataFinal.nis = "QR-" + Math.floor(1000 + Math.random() * 9000);
             dataFinal.nama = decodedText.trim() || "Siswa Tanpa Nama";
         }
@@ -366,26 +458,22 @@
         dataSiswaTerakhir = dataFinal; 
         listSiswaHariIni.push(dataFinal); 
 
-        // Update Log lokal secara instan agar pengguna tahu scan berhasil tanpa delay koneksi internet
         tambahKeTabelLog(dataFinal.waktu, dataFinal.nis, dataFinal.nama, statusTerpilih);
         document.getElementById('status-loading').style.display = 'none';
         document.getElementById('status-success').style.display = 'block';
 
-        // Kirim data ke Google Sheets di background (balik layar)
         fetch(WEB_APP_URL, {
             method: "POST",
             body: JSON.stringify(dataFinal),
             headers: { "Content-Type": "text/plain;charset=utf-8" }
         })
         .then(response => response.json())
-        .then(data => { console.log("Cloud terupdate:", data); })
-        .catch(error => { console.log("Data tersimpan aman di log lokal browser HP."); });
+        .catch(error => { console.log("Log lokal tersimpan."); });
 
-        // Berikan jeda waktu sebelum kamera diaktifkan kembali untuk scan kartu selanjutnya
         setTimeout(() => {
             document.getElementById('status-success').style.display = 'none';
             isProcessing = false; 
-        }, 2500);
+        }, 3000); // 3 detik jeda pengunci scanner agar tidak double scan di HP
     }
 
     function tambahKeTabelLog(waktu, nis, nama, status) {
@@ -435,7 +523,7 @@
 
     function unduhSemuaRekapExcel() {
         if(listSiswaHariIni.length === 0) {
-            alert("Belum ada data siswa di dalam log.");
+            alert("Belum ada data siswa di dalam log harian.");
             return;
         }
         let tanggalHariIni = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -473,19 +561,6 @@
         a.click();
         document.body.removeChild(a);
     }
-
-    // Fungsi inisialisasi QR box responsive untuk layar HP
-    function getQrBoxSize() {
-        let width = window.innerWidth;
-        return width < 600 ? { width: 180, height: 180 } : { width: 230, height: 230 };
-    }
-
-    let html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-        fps: 10, 
-        qrbox: getQrBoxSize(),
-        rememberLastUsedCamera: true
-    });
-    html5QrcodeScanner.render(onScanSuccess, (error) => {});
 </script>
 
 </body>
