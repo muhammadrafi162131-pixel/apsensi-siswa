@@ -279,7 +279,7 @@
                     <div id="reader"></div>
                     <div class="camera-controls">
                         <select id="cam-list" class="select-status" style="font-size:12px; padding:6px; color:#333; margin-bottom:2px;">
-                            <option value="">Memuat daftar kamera...</option>
+                            <option value="">Menunggu izin kamera...</option>
                         </select>
                         <button type="button" class="btn-cam btn-switch" onclick="switchKamera()">🔄 Ganti Kamera / Start</button>
                     </div>
@@ -324,7 +324,6 @@
     </div>
 
 <script>
-    // Link API Web App Google Apps Script Anda yang aktif
     const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby4oGGu1BoicT1NIM2AzUpibSMpFIOPgoDX5Qg7X_z_/exec"; 
 
     let nomorUrut = 1;
@@ -336,10 +335,19 @@
     let daftarKamera = [];
     let indeksKameraAktif = 0;
 
-    // Inisialisasi Scanner saat halaman dimuat
     document.addEventListener("DOMContentLoaded", function() {
         html5QrCode = new Html5QrCode("reader");
-        initKamera();
+        // Minta izin kamera secara eksplisit terlebih dahulu
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                // Hentikan stream sementara untuk dipakai oleh library
+                stream.getTracks().forEach(track => track.stop());
+                initKamera();
+            })
+            .catch(err => {
+                document.getElementById('cam-list').innerHTML = "<option>Akses kamera diblokir browser</option>";
+                alert("PENTING: Mohon izinkan akses kamera pada setelan browser HP Anda.");
+            });
     });
 
     function initKamera() {
@@ -349,7 +357,6 @@
                 const camListSelect = document.getElementById('cam-list');
                 camListSelect.innerHTML = "";
                 
-                // Cari index kamera belakang (environment back) secara otomatis
                 let targetIndex = 0;
                 devices.forEach((device, index) => {
                     let option = document.createElement('option');
@@ -357,6 +364,7 @@
                     option.text = device.label || `Kamera ${index + 1}`;
                     camListSelect.appendChild(option);
 
+                    // Prioritaskan kamera belakang HP
                     if (device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('belakang') || device.label.toLowerCase().includes('environment')) {
                         targetIndex = index;
                     }
@@ -364,14 +372,12 @@
 
                 indeksKameraAktif = targetIndex;
                 camListSelect.selectedIndex = targetIndex;
-                
-                // Jalankan kamera langsung
                 startScanner(devices[targetIndex].id);
             } else {
-                alert("Kamera tidak terdeteksi di perangkat ini.");
+                alert("Kamera tidak ditemukan.");
             }
         }).catch(err => {
-            alert("Gagal memuat izin kamera. Pastikan situs diizinkan mengakses kamera di pengaturan browser HP Anda.");
+            alert("Gagal memuat perangkat kamera.");
         });
     }
 
@@ -384,28 +390,24 @@
             onScanSuccess,
             (errorMessage) => {}
         ).catch(err => {
-            console.log("Gagal menyalakan kamera pilihan.");
+            console.log("Kamera gagal dimulai.");
         });
     }
 
     function switchKamera() {
         if (!html5QrCode) return;
-
         const camListSelect = document.getElementById('cam-list');
         
         html5QrCode.stop().then(() => {
-            // Jika dipicu manual dari dropdown
             let selectedId = camListSelect.value;
             if(selectedId) {
                 startScanner(selectedId);
             } else {
-                // Berganti bergilir otomatis
                 indeksKameraAktif = (indeksKameraAktif + 1) % daftarKamera.length;
                 camListSelect.selectedIndex = indeksKameraAktif;
                 startScanner(daftarKamera[indeksKameraAktif].id);
             }
         }).catch(err => {
-            // Jika posisi kamera sedang mati/error, paksa jalankan ulang
             startScanner(camListSelect.value || daftarKamera[0].id);
         });
     }
@@ -473,7 +475,7 @@
         setTimeout(() => {
             document.getElementById('status-success').style.display = 'none';
             isProcessing = false; 
-        }, 3000); // 3 detik jeda pengunci scanner agar tidak double scan di HP
+        }, 3000); 
     }
 
     function tambahKeTabelLog(waktu, nis, nama, status) {
