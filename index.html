@@ -145,8 +145,37 @@
         document.getElementById('status-success').style.display = 'block';
 
         // KIRIM KE SPREADSHEET DI BACKROUND
-        if (WEB_APP_URL !== "PASANG_URL_WEB_APP_ANDA_DISINI") {
-            fetch(WEB_APP_URL, {
+function doPost(e) {
+  try {
+    // Mengambil data kiriman dari aplikasi Scanner HTML
+    var jsonData = JSON.parse(e.postData.contents);
+    
+    var nis = jsonData.nis || "Tidak Ada NIS";
+    var nama = jsonData.nama || "Tidak Ada Nama";
+    var status = jsonData.status || "HADIR";
+    var ortu = jsonData.ortu || "";
+    
+    // 1. PROSES MASUKKAN DATA KE GOOGLE SHEETS
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    sheet.appendRow([new Date(), nis, nama, status, ortu]);
+    
+    // 2. LOGIKA KIRIM WHATSAPP (Silakan sesuaikan/aktifkan fungsi WA Anda di sini jika ada)
+    // kirimWA(ortu, nama, status);
+
+    // KUNCI UTAMA: Wajib memberikan respon sukses berformat JSON ke HTML agar tidak dianggap error
+    return ContentService.createTextOutput(JSON.stringify({ 
+      "result": "success", 
+      "message": "Data berhasil dicatat" 
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    // Jika sistem internal Google Sheets error, tetap berikan laporan ke HTML
+    return ContentService.createTextOutput(JSON.stringify({ 
+      "result": "error", 
+      "error": error.toString() 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}            fetch(WEB_APP_URL, {
                 method: "POST",
                 body: JSON.stringify(dataFinal),
                 headers: { "Content-Type": "text/plain;charset=utf-8" }
