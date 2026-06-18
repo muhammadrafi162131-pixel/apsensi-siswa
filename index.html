@@ -97,7 +97,7 @@
     </div>
 
 <script>
-    // Taruh URL Web App Google Apps Script Anda (dari Langkah 2) di antara tanda petik di bawah ini:
+    // PENTING: Ganti teks di bawah ini dengan URL Web App dari Google Apps Script Langkah 1
     const WEB_APP_URL = "PASANG_URL_WEB_APP_ANDA_DISINI"; 
 
     let nomorUrut = 1;
@@ -113,7 +113,7 @@
                 method: "POST",
                 body: JSON.stringify(dataCetak),
                 headers: { "Content-Type": "text/plain;charset=utf-8" }
-            }).catch(e => console.log("Kirim data background diabaikan, proses print tetap jalan."));
+            }).catch(e => console.log("Kirim background diabaikan."));
         }
         window.print(); 
     }
@@ -122,79 +122,44 @@
         if (isProcessing) return; 
         isProcessing = true; 
         let statusTerpilih = document.getElementById('status-input').value;
+        let dataFinal = { nis: "", nama: "", status: statusTerpilih, ortu: "" };
 
         try {
-            // Coba mendeteksi teks QR Code
+            // JIKA QR CODE ADALAH FORMAT JSON
             let dataSiswa = JSON.parse(decodedText);
-            
-            // Jika struktur data QR memiliki minimal data NIS atau NAMA (baik huruf kecil ataupun besar)
-            let nisData = dataSiswa.nis || dataSiswa.NIS || dataSiswa.Nis;
-            let namaData = dataSiswa.nama || dataSiswa.NAMA || dataSiswa.Nama;
-
-            if(!nisData || !namaData) { 
-                throw new Error("Data QR tidak lengkap"); 
-            }
-
-            document.getElementById('status-loading').style.display = 'block';
-            
-            let dataBersih = {
-                nis: nisData.toString(),
-                nama: namaData.toString(),
-                status: statusTerpilih,
-                ortu: dataSiswa.ortu || dataSiswa.ORTU || ""
-            };
-            
-            dataSiswaTerakhir = dataBersih; 
-
-            // LOGIKA PINTAR: Data langsung dimasukkan ke tabel log lokal web terlebih dahulu agar absensi tidak macet
-            tambahKeTabelLog(dataBersih.nis, dataBersih.nama, statusTerpilih);
-            document.getElementById('status-loading').style.display = 'none';
-            document.getElementById('status-success').style.display = 'block';
-
-            // Mengirim data ke Google Sheets di background (di balik layar)
-            if (WEB_APP_URL !== "PASANG_URL_WEB_APP_ANDA_DISINI") {
-                fetch(WEB_APP_URL, {
-                    method: "POST",
-                    body: JSON.stringify(dataBersih),
-                    headers: { "Content-Type": "text/plain;charset=utf-8" }
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if(data.result !== "success") {
-                        console.log("Spreadsheet menolak: " + data.error);
-                    }
-                })
-                .catch(err => {
-                    console.log("Sinkronisasi cloud gagal/offline, namun data log lokal Anda tetap aman.");
-                });
-            }
-
-            setTimeout(() => {
-                document.getElementById('status-success').style.display = 'none';
-                isProcessing = false; 
-            }, 2500);
-
+            dataFinal.nis = (dataSiswa.nis || dataSiswa.NIS || "QR-" + Math.floor(1000 + Math.random() * 9000)).toString();
+            dataFinal.nama = (dataSiswa.nama || dataSiswa.NAMA || decodedText).toString();
+            dataFinal.ortu = (dataSiswa.ortu || dataSiswa.ORTU || "").toString();
         } catch (e) {
-            // Toleransi jika isi QR Code ternyata berupa TEKS BIASA (Bukan JSON), sistem akan otomatis mengubahnya menjadi Nama Siswa
-            document.getElementById('status-loading').style.display = 'none';
-            
-            let teksQr = decodedText.trim();
-            if (teksQr.length > 0) {
-                let nisPalsu = "QR-" + Math.floor(1000 + Math.random() * 9000);
-                dataSiswaTerakhir = { nis: nisPalsu, nama: teksQr, status: statusTerpilih };
-                
-                tambahKeTabelLog(nisPalsu, teksQr, statusTerpilih);
-                document.getElementById('status-success').style.display = 'block';
-                
-                setTimeout(() => {
-                    document.getElementById('status-success').style.display = 'none';
-                    isProcessing = false;
-                }, 2500);
-            } else {
-                alert("Gagal membaca! QR Code kosong atau tidak terbaca dengan jelas.");
-                isProcessing = false;
-            }
+            // JIKA QR CODE HANYA TEKS BIASA (BUKAN JSON), SISTEM TETAP MENERIMA AGAR TIDAK MACET
+            dataFinal.nis = "QR-" + Math.floor(1000 + Math.random() * 9000);
+            dataFinal.nama = decodedText.trim() || "Siswa Tanpa Nama";
         }
+
+        document.getElementById('status-loading').style.display = 'block';
+        dataSiswaTerakhir = dataFinal;
+
+        // MASUKKAN KE LOG TABEL LOKAL SECARA INSTAN
+        tambahKeTabelLog(dataFinal.nis, dataFinal.nama, statusTerpilih);
+        document.getElementById('status-loading').style.display = 'none';
+        document.getElementById('status-success').style.display = 'block';
+
+        // KIRIM KE SPREADSHEET DI BACKROUND
+        if (WEB_APP_URL !== "PASANG_URL_WEB_APP_ANDA_DISINI") {
+            fetch(WEB_APP_URL, {
+                method: "POST",
+                body: JSON.stringify(dataFinal),
+                headers: { "Content-Type": "text/plain;charset=utf-8" }
+            })
+            .then(res => res.json())
+            .then(data => console.log("Respon server Google:", data))
+            .catch(err => console.log("Gagal koneksi cloud, log lokal tetap aman."));
+        }
+
+        setTimeout(() => {
+            document.getElementById('status-success').style.display = 'none';
+            isProcessing = false; 
+        }, 2000);
     }
 
     function tambahKeTabelLog(nis, nama, status) {
