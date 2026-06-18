@@ -168,6 +168,19 @@
             border-radius: 4px;
             font-weight: bold;
         }
+        .btn-export-single {
+            background-color: #1d804e;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .btn-export-single:hover {
+            background-color: #155e39;
+        }
 
         /* Sembunyikan elemen dashboard saat mode cetak kertas aktif */
         @media print {
@@ -226,11 +239,12 @@
                         <th>NIS</th>
                         <th>Nama Siswa</th>
                         <th>Status</th>
+                        <th style="width: 90px;">Aksi</th>
                     </tr>
                 </thead>
                 <tbody id="log-body">
                     <tr id="empty-message">
-                        <td colspan="5" class="empty-row">Belum ada data masuk. Silakan scan kartu.</td>
+                        <td colspan="6" class="empty-row">Belum ada data masuk. Silakan scan kartu.</td>
                     </tr>
                 </tbody>
             </table>
@@ -242,22 +256,20 @@
     // Taruh URL Web App Google Apps Script Anda di sini
     const WEB_APP_URL = "PASANG_URL_WEB_APP_ANDA_DISINI"; 
     let nomorUrut = 1;
-    let dataSiswaTerakhir = null; // Menyimpan data scan terakhir untuk dicetak otomatis
-    let isProcessing = false; // Flag status pengunci scan agar tidak terjadi tumpang tindih
+    let dataSiswaTerakhir = null; 
+    let isProcessing = false; // Flag status pengunci scan agar tidak bentrok
 
     // FUNGSI UTAMA: Memicu Cetak Printer, Update Sheets & Kirim WA
     function prosesCetakDanKirim() {
-        // Data default jika tombol diklik langsung tanpa scan kartu terlebih dahulu
         let dataCetak = dataSiswaTerakhir || {
             nis: "2026001",
             nama: "Budi Prasetyo (Uji Coba)",
-            ortu: "6281234567890" // Ganti dengan nomor asli untuk tes kirim WA
+            ortu: "6281234567890" 
         };
 
         document.getElementById('status-loading').innerText = "Memproses Cetak & Notifikasi WA...";
         document.getElementById('status-loading').style.display = 'block';
 
-        // 1. Kirim instruksi ke Google Sheets & API WhatsApp Backend
         fetch(WEB_APP_URL, {
             method: "POST",
             body: JSON.stringify(dataCetak),
@@ -267,10 +279,7 @@
         .then(data => {
             document.getElementById('status-loading').style.display = 'none';
             if(data.result === "success") {
-                // Update log lokal di tabel
                 tambahKeTabelLog(dataCetak.nis, dataCetak.nama, "CETAK KARTU");
-                
-                // 2. Buka jendela dialog cetak printer bawaan komputer secara otomatis
                 window.print(); 
             } else {
                 alert("Sistem gagal mencatat, namun Anda tetap dialihkan ke menu cetak printer.");
@@ -280,17 +289,15 @@
         .catch(error => {
             document.getElementById('status-loading').style.display = 'none';
             console.error("Error:", error);
-            // Tetap izinkan cetak offline jika internet mati
             window.print(); 
         });
     }
 
     // Fungsi membaca Kamera QR Code
     function onScanSuccess(decodedText, decodedResult) {
-        // Abaikan scan baru jika proses data sebelumnya belum selesai
-        if (isProcessing) return;
-
-        isProcessing = true; // Kunci alur scanning
+        if (isProcessing) return; // Abaikan jika proses scan sebelumnya belum selesai
+        
+        isProcessing = true; 
         document.getElementById('status-loading').innerText = "Mengirim data & WA...";
         document.getElementById('status-loading').style.display = 'block';
         let statusTerpilih = document.getElementById('status-input').value;
@@ -298,13 +305,13 @@
         try {
             let dataSiswa = JSON.parse(decodedText);
             
-            // Validasi kelayakan struktur data QR dasar
+            // Validasi data minimal dari QR Code
             if(!dataSiswa.nis || !dataSiswa.nama) {
-                throw new Error("Struktur data QR tidak valid");
+                throw new Error("Data QR Code tidak lengkap.");
             }
 
             dataSiswa.status = statusTerpilih;
-            dataSiswaTerakhir = dataSiswa; // Simpan ke memori agar bisa dicetak otomatis nanti jika tombol cetak diklik
+            dataSiswaTerakhir = dataSiswa; 
 
             fetch(WEB_APP_URL, {
                 method: "POST",
@@ -320,22 +327,21 @@
 
                     setTimeout(() => {
                         document.getElementById('status-success').style.display = 'none';
-                        isProcessing = false; // Buka kunci pemindai setelah 2,5 detik
+                        isProcessing = false; // Buka kembali kunci scanner setelah 2.5 detik
                     }, 2500);
                 } else {
                     alert("Gagal menyimpan data: " + data.error);
-                    isProcessing = false; // Buka kembali kunci jika server menolak
+                    isProcessing = false;
                 }
             })
             .catch(error => {
                 document.getElementById('status-loading').style.display = 'none';
                 alert("Koneksi internet bermasalah.");
-                isProcessing = false; // Buka kembali kunci jika jaringan terputus
+                isProcessing = false;
             });
 
         } catch (e) {
             alert("Format Kartu QR tidak dikenali atau salah susunan JSON.");
-            // Beri jeda 1,5 detik sebelum membuka scan lagi agar user sempat menjauhkan kartu yang salah
             setTimeout(() => {
                 isProcessing = false;
             }, 1500);
@@ -349,29 +355,69 @@
 
         let waktuSekarang = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + " WIB";
 
+        // Escape string nama untuk mengantisipasi tanda petik tunggal pada nama siswa saat dioper ke fungsi javascript
+        let namaEscaped = nama.replace(/'/g, "\\'");
+
         let barisBaru = `<tr>
             <td>${nomorUrut++}</td>
             <td>${waktuSekarang}</td>
             <td>${nis}</td>
             <td>${nama}</td>
             <td><span class="badge-hadir" style="${status === 'CETAK KARTU' ? 'background-color:#ebf8ff; color:#2b6cb0;' : ''}">${status}</span></td>
+            <td><button class="btn-export-single" onclick="exportDataSiswaKeExcel('${waktuSekarang}', '${nis}', '${namaEscaped}', '${status}')">📥 Excel</button></td>
         </tr>`;
 
         tbody.insertAdjacentHTML('afterbegin', barisBaru); 
         document.getElementById('total-siswa').innerText = nomorUrut - 1;
     }
 
-    // Inisialisasi scanner bawaan (Hanya perlu dirender sekali)
+    // Fungsi instan membuat dokumen excel perbaris siswa langsung unduh
+    function exportDataSiswaKeExcel(waktu, nis, nama, status) {
+        // Menyusun struktur tabel HTML internal excel
+        let htmlTemplate = `
+            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+            <head></head>
+            <body>
+                <table border="1">
+                    <tr style="background-color: #0066ff; color: #ffffff; font-weight: bold;">
+                        <th>Waktu Scan</th>
+                        <th>NIS</th>
+                        <th>Nama Siswa</th>
+                        <th>Status</th>
+                    </tr>
+                    <tr>
+                        <td>${waktu}</td>
+                        <td>'${nis}</td>
+                        <td>${nama}</td>
+                        <td>${status}</td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+        `;
+
+        // Proses enkursi blob data menjadi file biner excel (.xls) murni browser
+        let blob = new Blob([htmlTemplate], { type: "application/vnd.ms-excel" });
+        let url = URL.createObjectURL(blob);
+        
+        let a = document.createElement("a");
+        a.href = url;
+        // Penamaan file dinamis berdasarkan nomor NIS dan nama siswa bersangkutan
+        a.download = `Absen_${nis}_${nama.replace(/[^a-zA-Z0-9]/g, "_")}.xls`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    // Menginisialisasi komponen scanner (cukup dipanggil sekali)
     let html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-        fps: 10, // Menurunkan FPS sedikit agar menghemat beban CPU browser
+        fps: 10, 
         qrbox: { width: 220, height: 220 },
         rememberLastUsedCamera: true
     });
     
-    // Sembunyikan dan abaikan log pencarian internal dari penangkap frame kamera
-    html5QrcodeScanner.render(onScanSuccess, (error) => {
-        // Callback dikosongkan untuk menepis gangguan notifikasi "No MultiFormat Readers..." di konsol/layar
-    });
+    // Meredam kesalahan pelacakan frame kosong kamera agar UI web tetap bersih
+    html5QrcodeScanner.render(onScanSuccess, (error) => {});
 </script>
 
 </body>
