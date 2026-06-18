@@ -243,6 +243,7 @@
     const WEB_APP_URL = "PASANG_URL_WEB_APP_ANDA_DISINI"; 
     let nomorUrut = 1;
     let dataSiswaTerakhir = null; // Menyimpan data scan terakhir untuk dicetak otomatis
+    let isProcessing = false; // Flag status pengunci scan agar tidak terjadi tumpang tindih
 
     // FUNGSI UTAMA: Memicu Cetak Printer, Update Sheets & Kirim WA
     function prosesCetakDanKirim() {
@@ -286,13 +287,22 @@
 
     // Fungsi membaca Kamera QR Code
     function onScanSuccess(decodedText, decodedResult) {
-        html5QrcodeScanner.clear();
+        // Abaikan scan baru jika proses data sebelumnya belum selesai
+        if (isProcessing) return;
+
+        isProcessing = true; // Kunci alur scanning
         document.getElementById('status-loading').innerText = "Mengirim data & WA...";
         document.getElementById('status-loading').style.display = 'block';
         let statusTerpilih = document.getElementById('status-input').value;
 
         try {
             let dataSiswa = JSON.parse(decodedText);
+            
+            // Validasi kelayakan struktur data QR dasar
+            if(!dataSiswa.nis || !dataSiswa.nama) {
+                throw new Error("Struktur data QR tidak valid");
+            }
+
             dataSiswa.status = statusTerpilih;
             dataSiswaTerakhir = dataSiswa; // Simpan ke memori agar bisa dicetak otomatis nanti jika tombol cetak diklik
 
@@ -310,22 +320,25 @@
 
                     setTimeout(() => {
                         document.getElementById('status-success').style.display = 'none';
-                        startScanner(); 
+                        isProcessing = false; // Buka kunci pemindai setelah 2,5 detik
                     }, 2500);
                 } else {
                     alert("Gagal menyimpan data: " + data.error);
-                    startScanner();
+                    isProcessing = false; // Buka kembali kunci jika server menolak
                 }
             })
             .catch(error => {
                 document.getElementById('status-loading').style.display = 'none';
                 alert("Koneksi internet bermasalah.");
-                startScanner();
+                isProcessing = false; // Buka kembali kunci jika jaringan terputus
             });
 
         } catch (e) {
-            alert("Format Kartu QR tidak dikenali.");
-            startScanner();
+            alert("Format Kartu QR tidak dikenali atau salah susunan JSON.");
+            // Beri jeda 1,5 detik sebelum membuka scan lagi agar user sempat menjauhkan kartu yang salah
+            setTimeout(() => {
+                isProcessing = false;
+            }, 1500);
         }
     }
 
@@ -348,17 +361,17 @@
         document.getElementById('total-siswa').innerText = nomorUrut - 1;
     }
 
-    function startScanner() {
-        html5QrcodeScanner.render(onScanSuccess, (error) => {});
-    }
-
+    // Inisialisasi scanner bawaan (Hanya perlu dirender sekali)
     let html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-        fps: 15, 
+        fps: 10, // Menurunkan FPS sedikit agar menghemat beban CPU browser
         qrbox: { width: 220, height: 220 },
         rememberLastUsedCamera: true
     });
     
-    startScanner();
+    // Sembunyikan dan abaikan log pencarian internal dari penangkap frame kamera
+    html5QrcodeScanner.render(onScanSuccess, (error) => {
+        // Callback dikosongkan untuk menepis gangguan notifikasi "No MultiFormat Readers..." di konsol/layar
+    });
 </script>
 
 </body>
