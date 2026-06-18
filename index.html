@@ -55,7 +55,7 @@
         .btn-cetak { background-color: #ffffff; color: #0066ff; border-color: #e0e0e0; }
         .btn-cetak:hover { background-color: #f8fafc; border-color: #0066ff; }
 
-        /* Layout Utama (Grid) */
+        /* Layout Utama (Grid & Responsive HP) */
         .main-container {
             display: grid;
             grid-template-columns: 350px 1fr;
@@ -185,17 +185,14 @@
             cursor: pointer;
             font-weight: 600;
         }
-        .btn-export-single:hover {
-            background-color: #155e39;
-        }
 
-        /* BAGIAN FOOTER TOMBOL DOWNLOAD EXCEL */
+        /* Footer Tombol Download Excel */
         .download-footer-area {
             display: flex;
             justify-content: flex-end;
             padding-top: 15px;
             border-top: 2px solid #f1f5f9;
-            margin-top: auto; /* Memaksa tombol menetap di area paling bawah kartu */
+            margin-top: auto;
         }
         .btn-download-excel-all {
             background-color: #1d804e;
@@ -210,18 +207,32 @@
             align-items: center;
             gap: 8px;
             box-shadow: 0 4px 6px rgba(29, 128, 78, 0.15);
-            transition: all 0.2s ease;
-        }
-        .btn-download-excel-all:hover {
-            background-color: #155e39;
-            transform: translateY(-1px);
-            box-shadow: 0 6px 8px rgba(29, 128, 78, 0.25);
-        }
-        .btn-download-excel-all:active {
-            transform: translateY(1px);
         }
 
-        /* Sembunyikan elemen dashboard saat mode cetak kertas aktif */
+        /* MEDIA QUERY: Optimasi Tampilan Otomatis saat dibuka di HP */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+                padding: 15px;
+            }
+            .header-buttons {
+                width: 100%;
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+            .main-container {
+                grid-template-columns: 1fr; /* Mengubah susunan menjadi satu kolom ke bawah di HP */
+                padding: 15px;
+                gap: 15px;
+            }
+            .btn-download-excel-all {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
         @media print {
             .header, .main-container { display: none !important; }
         }
@@ -302,16 +313,11 @@
 
     let nomorUrut = 1;
     let dataSiswaTerakhir = null; 
-    let isProcessing = false; 
-    let listSiswaHariIni = []; // Penampung memori data lokal untuk diekspor sekaligus ke Excel
+    let isProcessing = false; // Kunci anti-double-scan untuk HP
+    let listSiswaHariIni = []; 
 
     function prosesCetakDanKirim() {
-        let dataCetak = dataSiswaTerakhir || {
-            nis: "2026001",
-            nama: "Budi Prasetyo (Uji Coba)",
-            ortu: "6281234567890" 
-        };
-
+        let dataCetak = dataSiswaTerakhir || { nis: "2026001", nama: "Budi Prasetyo (Uji Coba)", ortu: "6281234567890" };
         document.getElementById('status-loading').innerText = "Memproses Cetak & Notifikasi WA...";
         document.getElementById('status-loading').style.display = 'block';
 
@@ -327,14 +333,14 @@
         })
         .catch(error => {
             document.getElementById('status-loading').style.display = 'none';
-            console.error("Error:", error);
             tambahKeTabelLog(dataCetak.waktu || "Baru", dataCetak.nis, dataCetak.nama, "CETAK KARTU (OFFLINE)");
             window.print(); 
         });
     }
 
+    // FUNGSI SCAN BARU: Halus dan lancar di HP Android & iOS
     function onScanSuccess(decodedText, decodedResult) {
-        if (isProcessing) return; 
+        if (isProcessing) return; // Jika sedang memproses data, abaikan hasil scan berikutnya sementara waktu
         isProcessing = true; 
         
         let statusTerpilih = document.getElementById('status-input').value;
@@ -352,6 +358,7 @@
             dataFinal.nama = (dataSiswa.nama || dataSiswa.NAMA || decodedText).toString();
             dataFinal.ortu = (dataSiswa.ortu || dataSiswa.ORTU || "").toString();
         } catch (e) {
+            // Toleransi jika QR Code berisi teks biasa (bukan database JSON) agar HP tidak crash/muncul alert error
             dataFinal.nis = "QR-" + Math.floor(1000 + Math.random() * 9000);
             dataFinal.nama = decodedText.trim() || "Siswa Tanpa Nama";
         }
@@ -359,23 +366,22 @@
         dataSiswaTerakhir = dataFinal; 
         listSiswaHariIni.push(dataFinal); 
 
+        // Update Log lokal secara instan agar pengguna tahu scan berhasil tanpa delay koneksi internet
         tambahKeTabelLog(dataFinal.waktu, dataFinal.nis, dataFinal.nama, statusTerpilih);
         document.getElementById('status-loading').style.display = 'none';
         document.getElementById('status-success').style.display = 'block';
 
+        // Kirim data ke Google Sheets di background (balik layar)
         fetch(WEB_APP_URL, {
             method: "POST",
             body: JSON.stringify(dataFinal),
             headers: { "Content-Type": "text/plain;charset=utf-8" }
         })
         .then(response => response.json())
-        .then(data => {
-            console.log("Sinkronisasi cloud sukses:", data);
-        })
-        .catch(error => {
-            console.log("Pesan jaringan: Data aman disimpan pada log tabel lokal.");
-        });
+        .then(data => { console.log("Cloud terupdate:", data); })
+        .catch(error => { console.log("Data tersimpan aman di log lokal browser HP."); });
 
+        // Berikan jeda waktu sebelum kamera diaktifkan kembali untuk scan kartu selanjutnya
         setTimeout(() => {
             document.getElementById('status-success').style.display = 'none';
             isProcessing = false; 
@@ -399,14 +405,12 @@
         </tr>`;
 
         tbody.insertAdjacentHTML('afterbegin', barisBaru); 
-        document.getElementById('total-siswa').innerText = listSiswaHariIni.length > 0 ? listSiswaHariIni.length : nomorUrut - 1;
+        document.getElementById('total-siswa').innerText = listSiswaHariIni.length;
     }
 
-    // Ekspor per individu siswa
     function exportDataSiswaKeExcel(waktu, nis, nama, status) {
         let htmlTemplate = `
             <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-            <head><meta charset="UTF-8"></head>
             <body>
                 <table border="1">
                     <tr style="background-color: #0066ff; color: #ffffff; font-weight: bold;">
@@ -419,7 +423,6 @@
             </body>
             </html>
         `;
-
         let blob = new Blob([htmlTemplate], { type: "application/vnd.ms-excel;charset=utf-8" });
         let url = URL.createObjectURL(blob);
         let a = document.createElement("a");
@@ -430,32 +433,21 @@
         document.body.removeChild(a);
     }
 
-    // Ekspor akumulasi rekapitulasi semua siswa sekaligus
     function unduhSemuaRekapExcel() {
         if(listSiswaHariIni.length === 0) {
-            alert("Belum ada data riwayat siswa masuk yang terdata di dalam tabel log saat ini.");
+            alert("Belum ada data siswa di dalam log.");
             return;
         }
-
         let tanggalHariIni = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        
         let htmlTemplate = `
             <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-            <head>
-                <meta charset="UTF-8">
-                </head>
             <body>
                 <h2>LAPORAN REKAPITULASI ABSENSI SISWA</h2>
-                <p>Tanggal Pembuatan: <b>${tanggalHariIni}</b></p>
-                <br/>
+                <p>Tanggal Pembuatan: <b>${tanggalHariIni}</b></p><br/>
                 <table border="1">
                     <thead>
                         <tr style="background-color: #0066ff; color: #ffffff; font-weight: bold; text-align: center;">
-                            <th>No</th>
-                            <th>Waktu Scan</th>
-                            <th>NIS</th>
-                            <th>Nama Lengkap Siswa</th>
-                            <th>Status Kehadiran</th>
+                            <th>No</th><th>Waktu Scan</th><th>NIS</th><th>Nama Lengkap Siswa</th><th>Status Kehadiran</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -465,26 +457,16 @@
             htmlTemplate += `
                 <tr>
                     <td style="text-align: center;">${index + 1}</td>
-                    <td>${siswa.waktu}</td>
-                    <td>'${siswa.nis}</td>
-                    <td>${siswa.nama}</td>
-                    <td style="text-align: center; font-weight: bold;">${siswa.status}</td>
+                    <td>${siswa.waktu}</td><td>'${siswa.nis}</td><td>${siswa.nama}</td><td style="text-align: center; font-weight: bold;">${siswa.status}</td>
                 </tr>
             `;
         });
 
-        htmlTemplate += `
-                    </tbody>
-                </table>
-            </body>
-            </html>
-        `;
-
+        htmlTemplate += `</tbody></table></body></html>`;
         let blob = new Blob([htmlTemplate], { type: "application/vnd.ms-excel;charset=utf-8" });
         let url = URL.createObjectURL(blob);
         let a = document.createElement("a");
         a.href = url;
-        
         let formatFileTanggal = new Date().toISOString().slice(0,10);
         a.download = `Rekap_Total_Absensi_${formatFileTanggal}.xls`;
         document.body.appendChild(a);
@@ -492,7 +474,17 @@
         document.body.removeChild(a);
     }
 
-    let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 220, height: 220 }, rememberLastUsedCamera: true });
+    // Fungsi inisialisasi QR box responsive untuk layar HP
+    function getQrBoxSize() {
+        let width = window.innerWidth;
+        return width < 600 ? { width: 180, height: 180 } : { width: 230, height: 230 };
+    }
+
+    let html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+        fps: 10, 
+        qrbox: getQrBoxSize(),
+        rememberLastUsedCamera: true
+    });
     html5QrcodeScanner.render(onScanSuccess, (error) => {});
 </script>
 
