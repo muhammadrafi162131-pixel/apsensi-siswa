@@ -143,7 +143,7 @@
         .table-wrapper {
             width: 100%;
             overflow-x: auto;
-            flex-grow: 1;
+            margin-bottom: 20px;
         }
         table {
             width: 100%;
@@ -189,18 +189,19 @@
             background-color: #155e39;
         }
 
-        /* Tombol Download Excel Semua Siswa di Bawah Tabel */
-        .download-footer-container {
-            margin-top: 20px;
+        /* BAGIAN FOOTER TOMBOL DOWNLOAD EXCEL */
+        .download-footer-area {
+            display: flex;
+            justify-content: flex-end;
             padding-top: 15px;
-            border-top: 1px solid #edf2f7;
-            text-align: right;
+            border-top: 2px solid #f1f5f9;
+            margin-top: auto; /* Memaksa tombol menetap di area paling bawah kartu */
         }
         .btn-download-excel-all {
             background-color: #1d804e;
             color: white;
             border: none;
-            padding: 10px 20px;
+            padding: 12px 24px;
             border-radius: 6px;
             font-size: 14px;
             font-weight: bold;
@@ -208,10 +209,16 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            box-shadow: 0 2px 4px rgba(29, 128, 78, 0.2);
+            box-shadow: 0 4px 6px rgba(29, 128, 78, 0.15);
+            transition: all 0.2s ease;
         }
         .btn-download-excel-all:hover {
             background-color: #155e39;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 8px rgba(29, 128, 78, 0.25);
+        }
+        .btn-download-excel-all:active {
+            transform: translateY(1px);
         }
 
         /* Sembunyikan elemen dashboard saat mode cetak kertas aktif */
@@ -254,4 +261,240 @@
             </div>
 
             <div id="status-loading" class="status-msg loading">Mengirim data & WA...</div>
-            <div id="status-success" class="status-msg success">Ber
+            <div id="status-success" class="status-msg success">Berhasil Dicatat!</div>
+        </div>
+
+        <div class="card">
+            <div class="table-header">
+                <div class="card-title" style="margin-bottom:0;">📋 Log Aktivitas Masuk</div>
+                <div class="total-badge">Total: <span id="total-siswa">0</span> Siswa</div>
+            </div>
+
+            <div class="table-wrapper">
+                <table id="log-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">No</th>
+                            <th>Waktu Scan</th>
+                            <th>NIS</th>
+                            <th>Nama Siswa</th>
+                            <th>Status</th>
+                            <th style="width: 90px;">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="log-body">
+                        <tr id="empty-message">
+                            <td colspan="6" class="empty-row">Belum ada data masuk. Silakan scan kartu.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="download-footer-area">
+                <button class="btn btn-download-excel-all" onclick="unduhSemuaRekapExcel()">📥 Download Rekap Semua Siswa ke Excel (.XLS)</button>
+            </div>
+        </div>
+
+    </div>
+
+<script>
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby4oGGu1BoicT1NIM2AzUpibSMpFIOPgoDX5Qg7X_z_/exec"; 
+
+    let nomorUrut = 1;
+    let dataSiswaTerakhir = null; 
+    let isProcessing = false; 
+    let listSiswaHariIni = []; // Penampung memori data lokal untuk diekspor sekaligus ke Excel
+
+    function prosesCetakDanKirim() {
+        let dataCetak = dataSiswaTerakhir || {
+            nis: "2026001",
+            nama: "Budi Prasetyo (Uji Coba)",
+            ortu: "6281234567890" 
+        };
+
+        document.getElementById('status-loading').innerText = "Memproses Cetak & Notifikasi WA...";
+        document.getElementById('status-loading').style.display = 'block';
+
+        fetch(WEB_APP_URL, {
+            method: "POST",
+            body: JSON.stringify(dataCetak),
+            headers: { "Content-Type": "text/plain;charset=utf-8" }
+        })
+        .then(response => {
+            document.getElementById('status-loading').style.display = 'none';
+            tambahKeTabelLog(dataCetak.waktu || "Baru", dataCetak.nis, dataCetak.nama, "CETAK KARTU");
+            window.print(); 
+        })
+        .catch(error => {
+            document.getElementById('status-loading').style.display = 'none';
+            console.error("Error:", error);
+            tambahKeTabelLog(dataCetak.waktu || "Baru", dataCetak.nis, dataCetak.nama, "CETAK KARTU (OFFLINE)");
+            window.print(); 
+        });
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+        if (isProcessing) return; 
+        isProcessing = true; 
+        
+        let statusTerpilih = document.getElementById('status-input').value;
+        let dataFinal = { waktu: "", nis: "", nama: "", status: statusTerpilih, ortu: "" };
+
+        document.getElementById('status-loading').innerText = "Mengirim data & WA...";
+        document.getElementById('status-loading').style.display = 'block';
+
+        let waktuSekarang = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + " WIB";
+        dataFinal.waktu = waktuSekarang;
+
+        try {
+            let dataSiswa = JSON.parse(decodedText);
+            dataFinal.nis = (dataSiswa.nis || dataSiswa.NIS || "QR-" + Math.floor(1000 + Math.random() * 9000)).toString();
+            dataFinal.nama = (dataSiswa.nama || dataSiswa.NAMA || decodedText).toString();
+            dataFinal.ortu = (dataSiswa.ortu || dataSiswa.ORTU || "").toString();
+        } catch (e) {
+            dataFinal.nis = "QR-" + Math.floor(1000 + Math.random() * 9000);
+            dataFinal.nama = decodedText.trim() || "Siswa Tanpa Nama";
+        }
+
+        dataSiswaTerakhir = dataFinal; 
+        listSiswaHariIni.push(dataFinal); 
+
+        tambahKeTabelLog(dataFinal.waktu, dataFinal.nis, dataFinal.nama, statusTerpilih);
+        document.getElementById('status-loading').style.display = 'none';
+        document.getElementById('status-success').style.display = 'block';
+
+        fetch(WEB_APP_URL, {
+            method: "POST",
+            body: JSON.stringify(dataFinal),
+            headers: { "Content-Type": "text/plain;charset=utf-8" }
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log("Sinkronisasi cloud sukses:", data);
+        })
+        .catch(error => {
+            console.log("Pesan jaringan: Data aman disimpan pada log tabel lokal.");
+        });
+
+        setTimeout(() => {
+            document.getElementById('status-success').style.display = 'none';
+            isProcessing = false; 
+        }, 2500);
+    }
+
+    function tambahKeTabelLog(waktu, nis, nama, status) {
+        const tbody = document.getElementById('log-body');
+        const emptyMsg = document.getElementById('empty-message');
+        if (emptyMsg) emptyMsg.remove();
+
+        let namaEscaped = nama.replace(/'/g, "\\'");
+
+        let barisBaru = `<tr>
+            <td>${nomorUrut++}</td>
+            <td>${waktu}</td>
+            <td>${nis}</td>
+            <td>${nama}</td>
+            <td><span class="badge-hadir" style="${status.includes('CETAK') ? 'background-color:#ebf8ff; color:#2b6cb0;' : ''}">${status}</span></td>
+            <td><button class="btn-export-single" onclick="exportDataSiswaKeExcel('${waktu}', '${nis}', '${namaEscaped}', '${status}')">📥 Excel</button></td>
+        </tr>`;
+
+        tbody.insertAdjacentHTML('afterbegin', barisBaru); 
+        document.getElementById('total-siswa').innerText = listSiswaHariIni.length > 0 ? listSiswaHariIni.length : nomorUrut - 1;
+    }
+
+    // Ekspor per individu siswa
+    function exportDataSiswaKeExcel(waktu, nis, nama, status) {
+        let htmlTemplate = `
+            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+            <head><meta charset="UTF-8"></head>
+            <body>
+                <table border="1">
+                    <tr style="background-color: #0066ff; color: #ffffff; font-weight: bold;">
+                        <th>Waktu Scan</th><th>NIS</th><th>Nama Siswa</th><th>Status</th>
+                    </tr>
+                    <tr>
+                        <td>${waktu}</td><td>'${nis}</td><td>${nama}</td><td>${status}</td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+        `;
+
+        let blob = new Blob([htmlTemplate], { type: "application/vnd.ms-excel;charset=utf-8" });
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement("a");
+        a.href = url;
+        a.download = `Absen_${nis}_${nama.replace(/[^a-zA-Z0-9]/g, "_")}.xls`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    // Ekspor akumulasi rekapitulasi semua siswa sekaligus
+    function unduhSemuaRekapExcel() {
+        if(listSiswaHariIni.length === 0) {
+            alert("Belum ada data riwayat siswa masuk yang terdata di dalam tabel log saat ini.");
+            return;
+        }
+
+        let tanggalHariIni = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        
+        let htmlTemplate = `
+            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+            <head>
+                <meta charset="UTF-8">
+                </head>
+            <body>
+                <h2>LAPORAN REKAPITULASI ABSENSI SISWA</h2>
+                <p>Tanggal Pembuatan: <b>${tanggalHariIni}</b></p>
+                <br/>
+                <table border="1">
+                    <thead>
+                        <tr style="background-color: #0066ff; color: #ffffff; font-weight: bold; text-align: center;">
+                            <th>No</th>
+                            <th>Waktu Scan</th>
+                            <th>NIS</th>
+                            <th>Nama Lengkap Siswa</th>
+                            <th>Status Kehadiran</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        listSiswaHariIni.forEach((siswa, index) => {
+            htmlTemplate += `
+                <tr>
+                    <td style="text-align: center;">${index + 1}</td>
+                    <td>${siswa.waktu}</td>
+                    <td>'${siswa.nis}</td>
+                    <td>${siswa.nama}</td>
+                    <td style="text-align: center; font-weight: bold;">${siswa.status}</td>
+                </tr>
+            `;
+        });
+
+        htmlTemplate += `
+                    </tbody>
+                </table>
+            </body>
+            </html>
+        `;
+
+        let blob = new Blob([htmlTemplate], { type: "application/vnd.ms-excel;charset=utf-8" });
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement("a");
+        a.href = url;
+        
+        let formatFileTanggal = new Date().toISOString().slice(0,10);
+        a.download = `Rekap_Total_Absensi_${formatFileTanggal}.xls`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 220, height: 220 }, rememberLastUsedCamera: true });
+    html5QrcodeScanner.render(onScanSuccess, (error) => {});
+</script>
+
+</body>
+</html>
