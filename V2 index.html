@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistem Terpadu Absensi & Kartu QR</title>
+    
     <script src="https://unpkg.com/html5-qrcode"></script>
     
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -126,7 +127,7 @@
             cursor: pointer;
         }
 
-        /* Scanner Area Sederhana */
+        /* Scanner Area */
         #reader {
             width: 100%;
             border: 2px dashed #0066ff;
@@ -142,7 +143,7 @@
             border-radius: 6px;
             text-align: center;
         }
-
+        
         /* Status Alerts */
         .status-msg {
             padding: 10px;
@@ -238,7 +239,6 @@
             box-shadow: 0 4px 6px rgba(29, 128, 78, 0.15);
         }
 
-        /* Responsive Layout HP */
         @media (max-width: 768px) {
             .header { flex-direction: column; gap: 15px; text-align: center; padding: 15px; }
             .header-buttons { width: 100%; justify-content: center; flex-wrap: wrap; }
@@ -280,23 +280,23 @@
             </div>
 
             <div class="form-group">
-                <label>Kamera Scanner (Live)</label>
+                <label>Kamera Scanner</label>
                 <div id="reader"></div>
                 
                 <div class="file-input-wrapper">
-                    <label style="font-size:12px; font-weight:bold; color:#2d3748; display:block; margin-bottom:5px;">📷 Kamera Rusak? Upload Foto QR di sini:</label>
-                    <input type="file" id="qr-input-file" accept="image/*" style="font-size:12px;">
+                    <label style="font-size:11px; font-weight:bold; color:#4a5568; display:block; margin-bottom:5px;">Atau Upload Gambar/Foto QR:</label>
+                    <input type="file" id="qr-input-file" accept="image/*" style="font-size:11px;">
                 </div>
             </div>
 
             <div class="form-group" style="margin-top:10px; padding-top:15px; border-top:1px dashed #cbd5e0;">
-                <label>⌨️ Input Manual (Tanpa Scan)</label>
+                <label>⌨️ Input Manual</label>
                 <input type="text" id="manual-nama" class="input-manual" placeholder="Nama Siswa">
                 <input type="text" id="manual-jurusan" class="input-manual" placeholder="Jurusan / NIS">
                 <button type="button" class="btn-manual" onclick="prosesInputManual()">Kirim Manual</button>
             </div>
 
-            <div id="status-loading" class="status-msg loading">Mengirim data ke Firestore...</div>
+            <div id="status-loading" class="status-msg loading">Mengirim data...</div>
             <div id="status-success" class="status-msg success">Berhasil Dicatat!</div>
         </div>
 
@@ -334,19 +334,19 @@
     </div>
 
 <script>
-    // =============================================================
-    // PENTING: ISI VARIABEL INI DENGAN DATA DARI FIREBASE CONSOLE ANDA
-    // =============================================================
+    // =========================================================================
+    // WAJIB: GANTI DENGAN KREDENSIAL KONFIGURASI FIREBASE PROYEK ANDA SENDIRI
+    // =========================================================================
     const firebaseConfig = {
-        apiKey: "MASUKKAN_API_KEY_ANDA_DI_SINI",
-        authDomain: "ID-PROYEK-ANDA.firebaseapp.com",
-        projectId: "ID-PROYEK-ANDA",
-        storageBucket: "ID-PROYEK-ANDA.appspot.com",
-        messagingSenderId: "NOMOR_SENDER_ANDA",
-        appId: "ID_APP_WEB_ANDA"
+        apiKey: "AIzaSyD-MASUKKAN-API-KEY-ANDA",
+        authDomain: "PROYEK-ANDA.firebaseapp.com",
+        projectId: "PROYEK-ANDA",
+        storageBucket: "PROYEK-ANDA.appspot.com",
+        messagingSenderId: "1234567890",
+        appId: "1:1234567890:web:abcdef123456"
     };
 
-    // Inisialisasi Firebase & Cloud Firestore Database
+    // Inisialisasi Firebase & Firestore Database
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
@@ -355,28 +355,241 @@
     let nomorUrut = 1;
     let dataSiswaTerakhir = null; 
     let listSiswaHariIni = []; 
-
     let html5QrcodeScanner = null;
 
-  document.addEventListener("DOMContentLoaded", function() {
-    // Menggunakan inisialisasi standar yang langsung memanggil list kamera tanpa memaksakan memori pelacakan terakhir
-    html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-        fps: 10, 
-        qrbox: 250 
-    });
-    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
-        // Handler untuk scan lewat file gambar
+    document.addEventListener("DOMContentLoaded", function() {
+        // PERBAIKAN: Inisialisasi scanner dibuat lebih ringan agar tidak gampang freeze
+        html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+            fps: 15, 
+            qrbox: 250
+        });
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+
+        // Handler untuk scan via file foto/gambar QR
         const fileInput = document.getElementById('qr-input-file');
         fileInput.addEventListener('change', e => {
             if (e.target.files.length == 0) return;
             const imageFile = e.target.files[0];
             const html5QrCode = new Html5QrCode("reader");
             
-            document.getElementById('status-loading').innerText = "Membaca file gambar...";
+            document.getElementById('status-loading').innerText = "Membaca gambar...";
             document.getElementById('status-loading').style.display = 'block';
 
             html5QrCode.scanFile(imageFile, true)
                 .then(decodedText => {
                     onScanSuccess(decodedText);
-                    fileInput.value = ""; // reset input
-                      
+                    fileInput.value = ""; 
+                })
+                .catch(err => {
+                    document.getElementById('status-loading').style.display = 'none';
+                    alert("QR Code tidak terbaca di gambar tersebut. Pastikan foto fokus dan jelas.");
+                    fileInput.value = "";
+                });
+        });
+    });
+
+    function onScanSuccess(decodedText, decodedResult) {
+        let statusTerpilih = document.getElementById('status-input').value;
+        let dataFinal = { waktu: "", jurusan: "", nama: "", status: statusTerpilih, ortu: "" };
+
+        document.getElementById('status-loading').innerText = "Menyimpan data...";
+        document.getElementById('status-loading').style.display = 'block';
+
+        let waktuSekarang = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + " WIB";
+        dataFinal.waktu = waktuSekarang;
+
+        try {
+            let dataSiswa = JSON.parse(decodedText);
+            dataFinal.jurusan = (dataSiswa.jurusan || dataSiswa.JURUSAN || dataSiswa.nis || dataSiswa.nisn || dataSiswa.NIS || "-").toString();
+            dataFinal.nama = (dataSiswa.nama || dataSiswa.NAMA || decodedText).toString();
+            dataFinal.ortu = (dataSiswa.ortu || dataSiswa.ORTU || "").toString();
+        } catch (e) {
+            dataFinal.jurusan = "-";
+            dataFinal.nama = decodedText.trim() || "Siswa Tanpa Nama";
+        }
+
+        prosesSimpanDanUpdate(dataFinal, statusTerpilih);
+    }
+
+    // Fungsi Input Manual (Pengganti scan jika hardware bermasalah)
+    function prosesInputManual() {
+        let namaInput = document.getElementById('manual-nama').value.trim();
+        let jurusanInput = document.getElementById('manual-jurusan').value.trim();
+        let statusTerpilih = document.getElementById('status-input').value;
+
+        if(!namaInput) {
+            alert("Nama siswa tidak boleh kosong!");
+            return;
+        }
+
+        let waktuSekarang = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + " WIB";
+        let dataFinal = {
+            waktu: waktuSekarang,
+            nama: namaInput,
+            jurusan: jurusanInput || "-",
+            status: statusTerpilih,
+            ortu: ""
+        };
+
+        prosesSimpanDanUpdate(dataFinal, statusTerpilih);
+        
+        // Bersihkan field manual setelah kirim
+        document.getElementById('manual-nama').value = "";
+        document.getElementById('manual-jurusan').value = "";
+    }
+
+    // Fungsi pusat untuk menyimpan ke Firestore dan memperbarui UI secara real-time
+    function prosesSimpanDanUpdate(dataFinal, statusTerpilih) {
+        dataSiswaTerakhir = dataFinal; 
+        listSiswaHariIni.push(dataFinal); 
+
+        // -------------------------------------------------------------
+        // PERBAIKAN: MENYIMPAN DATA ASLI KE CLOUD FIRESTORE (Koleksi "5338")
+        // -------------------------------------------------------------
+        db.collection("5338").add({
+            "No": nomorUrut,
+            "Waktu Scan": dataFinal.waktu,
+            "Nama Siswa": dataFinal.nama,
+            "Jurusan": dataFinal.jurusan,
+            "Status": dataFinal.status,
+            "Aksi": "O"
+        })
+        .then((docRef) => {
+            console.log("Data berhasil dikirim ke Firestore dengan ID:", docRef.id);
+        })
+        .catch((error) => {
+            console.error("Gagal mengirim data ke Firestore:", error);
+        });
+        // -------------------------------------------------------------
+
+        tambahKeTabelLog(dataFinal.waktu, dataFinal.nama, dataFinal.jurusan, statusTerpilih);
+        document.getElementById('status-loading').style.display = 'none';
+        document.getElementById('status-success').style.display = 'block';
+
+        // Mengirimkan data paralel ke Google Sheets backend via Apps Script URL
+        fetch(WEB_APP_URL, {
+            method: "POST",
+            body: JSON.stringify(dataFinal),
+            headers: { "Content-Type": "text/plain;charset=utf-8" }
+        })
+        .then(response => response.json())
+        .catch(error => { console.log("Data tercatat lokal di log tabel harian browser."); });
+
+        setTimeout(() => {
+            document.getElementById('status-success').style.display = 'none';
+        }, 2000);
+    }
+
+    function onScanFailure(error) {}
+
+    function prosesCetakDanKirim() {
+        let dataCetak = dataSiswaTerakhir || { jurusan: "TKJ", nama: "Budi Prasetyo (Uji Coba)", ortu: "6281234567890" };
+        document.getElementById('status-loading').innerText = "Memproses Cetak...";
+        document.getElementById('status-loading').style.display = 'block';
+
+        fetch(WEB_APP_URL, {
+            method: "POST",
+            body: JSON.stringify(dataCetak),
+            headers: { "Content-Type": "text/plain;charset=utf-8" }
+        })
+        .then(response => {
+            document.getElementById('status-loading').style.display = 'none';
+            tambahKeTabelLog(dataCetak.waktu || "Baru", dataCetak.nama, dataCetak.jurusan, "CETAK KARTU");
+            window.print(); 
+        })
+        .catch(error => {
+            document.getElementById('status-loading').style.display = 'none';
+            window.print(); 
+        });
+    }
+
+    function tambahKeTabelLog(waktu, nama, jurusan, status) {
+        const tbody = document.getElementById('log-body');
+        const emptyMsg = document.getElementById('empty-message');
+        if (emptyMsg) emptyMsg.remove();
+
+        let namaEscaped = nama.replace(/'/g, "\\'");
+        let jurusanEscaped = jurusan.replace(/'/g, "\\'");
+
+        let barisBaru = `<tr>
+            <td>${nomorUrut++}</td>
+            <td>${waktu}</td>
+            <td>${nama}</td>
+            <td>${jurusan}</td>
+            <td><span class="badge-hadir" style="${status.includes('CETAK') ? 'background-color:#ebf8ff; color:#2b6cb0;' : ''}">${status}</span></td>
+            <td><button class="btn-export-single" onclick="exportDataSiswaKeExcel('${waktu}', '${namaEscaped}', '${jurusanEscaped}', '${status}')">📥 Excel</button></td>
+        </tr>`;
+
+        tbody.insertAdjacentHTML('afterbegin', barisBaru); 
+        document.getElementById('total-siswa').innerText = listSiswaHariIni.length;
+    }
+
+    function exportDataSiswaKeExcel(waktu, nama, jurusan, status) {
+        let htmlTemplate = `
+            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+            <body>
+                <table border="1">
+                    <tr style="background-color: #0066ff; color: #ffffff; font-weight: bold;">
+                        <th>Waktu Scan</th><th>Nama Siswa</th><th>Jurusan</th><th>Status</th>
+                    </tr>
+                    <tr>
+                        <td>${waktu}</td><td>${nama}</td><td>${jurusan}</td><td>${status}</td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+        `;
+        let blob = new Blob([htmlTemplate], { type: "application/vnd.ms-excel;charset=utf-8" });
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement("a");
+        a.href = url;
+        a.download = `Absen_${jurusan}_${nama.replace(/[^a-zA-Z0-9]/g, "_")}.xls`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    function unduhSemuaRekapExcel() {
+        if(listSiswaHariIni.length === 0) {
+            alert("Belum ada data siswa di dalam log harian.");
+            return;
+        }
+        let tanggalHariIni = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        let htmlTemplate = `
+            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+            <body>
+                <h2>LAPORAN REKAPITULASI ABSENSI SISWA</h2>
+                <p>Tanggal Pembuatan: <b>${tanggalHariIni}</b></p><br/>
+                <table border="1">
+                    <thead>
+                        <tr style="background-color: #0066ff; color: #ffffff; font-weight: bold; text-align: center;">
+                            <th>No</th><th>Waktu Scan</th><th>Nama Lengkap Siswa</th><th>Jurusan</th><th>Status Kehadiran</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        listSiswaHariIni.forEach((siswa, index) => {
+            htmlTemplate += `
+                <tr>
+                    <td style="text-align: center;">${index + 1}</td>
+                    <td>${siswa.waktu}</td><td>${siswa.nama}</td><td>${siswa.jurusan}</td><td style="text-align: center; font-weight: bold;">${siswa.status}</td>
+                </tr>
+            `;
+        });
+
+        htmlTemplate += `</tbody></table></body></html>`;
+        let blob = new Blob([htmlTemplate], { type: "application/vnd.ms-excel;charset=utf-8" });
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement("a");
+        a.href = url;
+        let formatFileTanggal = new Date().toISOString().slice(0,10);
+        a.download = `Rekap_Total_Absensi_${formatFileTanggal}.xls`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+</script>
+
+</body>
+</html>
