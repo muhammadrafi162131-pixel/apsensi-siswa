@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Terpadu Absensi & Kartu QR</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background-color: #f4f6f9;
+            color: #333;
+        }
+        /* Header Dashboard */
+        .header {
+            background-color: #ffffff;
+            padding: 15px 30px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .brand h2 {
+            color: #0066ff;
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .brand p {
+            font-size: 12px;
+            color: #777;
+            margin-top: 3px;
+        }
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 5px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            border: 1px solid transparent;
+        }
+        .btn-sheet { background-color: #ffffff; color: #1d804e; border-color: #1d804e; }
+        .btn-kerja { background-color: #0066ff; color: #fff; border: none; }
+        .btn-cetak { background-color: #ffffff; color: #0066ff; border-color: #e0e0e0; }
+        .btn-cetak:hover { background-color: #f8fafc; border-color: #0066ff; }
+
+        /* Layout Utama (Grid) */
+        .main-container {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 20px;
+            padding: 25px 30px;
+        }
+        .card {
+            background: #ffffff;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #4a5568;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Form / Control Panel */
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            color: #718096;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        .select-status {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #0066ff;
+            background-color: #f8fafc;
+        }
+
+        /* Scanner Area Sederhana */
+        #reader {
+            width: 100%;
+            border: 2px dashed #0066ff;
+            border-radius: 6px;
+            overflow: hidden;
+            background: #fafafa;
+            padding: 10px;
+        }
+        
+        /* Status Alerts */
+        .status-msg {
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-top: 10px;
+            display: none;
+            text-align: center;
+        }
+        .loading { background-color: #fffaf0; color: #dd6b20; border: 1px solid #fbd38d; }
+        .success { background-color: #f0fff4; color: #38a169; border: 1px solid #9ae6b4; }
+
+        /* Tabel Log Aktivitas */
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .total-badge {
+            background-color: #f1f5f9;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid #e2e8f0;
+        }
+        .table-wrapper {
+            width: 100%;
+            overflow-x: auto;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+        }
+        th {
+            background-color: #f8fafc;
+            color: #4a5568;
+            font-weight: 600;
+            padding: 12px 10px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #edf2f7;
+            color: #4a5568;
+        }
+        .empty-row {
+            text-align: center;
+            color: #a0aec0;
+            padding: 40px 0;
+        }
+        .badge-hadir {
+            background-color: #e6fffa;
+            color: #319795;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .btn-export-single {
+            background-color: #1d804e;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .download-footer-area {
+            display: flex;
+            justify-content: flex-end;
+            padding-top: 15px;
+            border-top: 2px solid #f1f5f9;
+            margin-top: auto;
+        }
+        .btn-download-excel-all {
+            background-color: #1d804e;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 6px rgba(29, 128, 78, 0.15);
+        }
+
+        /* Responsive Layout HP */
+        @media (max-width: 768px) {
+            .header { flex-direction: column; gap: 15px; text-align: center; padding: 15px; }
+            .header-buttons { width: 100%; justify-content: center; flex-wrap: wrap; }
+            .main-container { grid-template-columns: 1fr; padding: 15px; gap: 15px; }
+            .btn-download-excel-all { width: 100%; justify-content: center; }
+        }
+
+        @media print {
+            .header, .main-container { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="brand">
+            <h2>█ Sistem Terpadu Absensi & Kartu QR</h2>
+            <p>Kelola absensi real-time WhatsApp dan cetak kartu pelajar mandiri.</p>
+        </div>
+        <div class="header-buttons">
+            <a href="https://docs.google.com/spreadsheets/d/1ef_qb9SFri_QlljzrYZJt5sxIBg18IpCAv5eGfOjd1k/edit?usp=sharing" target="_blank" class="btn btn-sheet">📊 Buka Google Sheets</a>
+            <button class="btn btn-kerja">Lembar Kerja Absen</button>
+            <button class="btn btn-cetak" onclick="prosesCetakDanKirim()">🖨️ Cetak Kartu Pelajar</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        
+        <div class="card">
+            <div class="card-title">⚙️ Control Panel</div>
+            
+            <div class="form-group">
+                <label>Status Input</label>
+                <select id="status-input" class="select-status">
+                    <option value="HADIR">🟢 HADIR</option>
+                    <option value="TERLAMBAT">🟡 TERLAMBAT</option>
+                    <option value="IZIN">🔵 IZIN</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Kamera Scanner</label>
+                <div id="reader"></div>
+            </div>
+
+            <div id="status-loading" class="status-msg loading">Mengirim data & WA...</div>
+            <div id="status-success" class="status-msg success">Berhasil Dicatat!</div>
+        </div>
+
+        <div class="card">
+            <div class="table-header">
+                <div class="card-title" style="margin-bottom:0;">📋 Log Aktivitas Masuk</div>
+                <div class="total-badge">Total: <span id="total-siswa">0</span> Siswa</div>
+            </div>
+
+            <div class="table-wrapper">
+                <table id="log-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">No</th>
+                            <th>Waktu Scan</th>
+                            <th>Nama Siswa</th>
+                            <th>Jurusan</th>
+                            <th>Status</th>
+                            <th style="width: 90px;">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="log-body">
+                        <tr id="empty-message">
+                            <td colspan="6" class="empty-row">Belum ada data masuk. Silakan scan kartu.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="download-footer-area">
+                <button class="btn btn-download-excel-all" onclick="unduhSemuaRekapExcel()">📥 Download Rekap Semua Siswa ke Excel (.XLS)</button>
+            </div>
+        </div>
+
+    </div>
+
+<script>
+    // ==========================================
+    // KONFIGURASI FIREBASE
+    // ==========================================
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_AUTH_DOMAIN",
+        databaseURL: "YOUR_DATABASE_URL",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_STORAGE_BUCKET",
+        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+        appId: "YOUR_APP_ID"
+    };
+    
+    // Inisialisasi Firebase
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby4oGGu1BoicT1NIM2AzUpibSMpFIOPgoDX5Qg7X_z_/exec"; 
+
+    let nomorUrut = 1;
+    let dataSiswaTerakhir = null; 
+    let listSiswaHariIni = []; 
+
+    let html5QrcodeScanner = null;
+
+    document.addEventListener("DOMContentLoaded", function() {
+        html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+            fps: 10, 
+            qrbox: { width: 200, height: 200 },
+            rememberLastUsedCamera: true,
+            supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+        });
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    });
+
+    function onScanSuccess(decodedText, decodedResult) {
+        let statusTerpilih = document.getElementById('status-input').value;
+        let dataFinal = { waktu: "", jurusan: "", nama: "", status: statusTerpilih, ortu: "" };
+
+        document.getElementById('status-loading').innerText = "Mengirim data ke Database & WA...";
+        document.getElementById('status-loading').style.display = 'block';
+
+        let waktuSekarang = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + " WIB";
+        dataFinal.waktu = waktuSekarang;
+
+        try {
+            let dataSiswa = JSON.parse(decodedText);
+            dataFinal.jurusan = (dataSiswa.jurusan || dataSiswa.JURUSAN || dataSiswa.nis || dataSiswa.nisn || dataSiswa.NIS || "-").toString();
+            dataFinal.nama = (dataSiswa.nama || dataSiswa.NAMA || decodedText).toString();
+            dataFinal.ortu = (dataSiswa.ortu || dataSiswa.ORTU || "").toString();
+        } catch (e) {
+            dataFinal.jurusan = "-";
+            dataFinal.nama = decodedText.trim() || "Siswa Tanpa Nama";
+        }
+
+        dataSiswaTerakhir = dataFinal; 
+        listSiswaHariIni.push(dataFinal); 
+
+        // 1. Simpan otomatis ke Firebase Realtime Database
+        let formatTanggalKey = new Date().toISOString().slice(0,10); // Menghasilkan format YYYY-MM-DD
+        
+        // Data disimpan di bawah node 'absensi/YYYY-MM-DD' menggunakan push() agar generate unique key otomatis
+        database.ref('absensi/' + formatTanggalKey).push(dataFinal)
+        .then(() => {
+            console.log("Berhasil tersimpan di Firebase!");
+        })
+        .catch((error) => {
+            console.error("Gagal menyimpan ke Firebase: ", error);
+        });
+
+        // 2. Tampilkan di Tabel Log Web UI
+        tambahKeTabelLog(dataFinal.waktu, dataFinal.nama, dataFinal.jurusan, statusTerpilih);
+        document.getElementById('status-loading').style.display = 'none';
+        document.getElementById('status-success').style.display = 'block';
+
+        // 3. Mengirimkan objek ke Google Apps Script backend lama (tetap dipertahankan)
+        fetch(WEB_APP_URL, {
+            method: "POST",
+            body: JSON.stringify(dataFinal),
+            headers: { "Content-Type": "text/plain;charset=utf-8" }
+        })
+        .then(response => response.json())
+        .catch(error => { console.log("Tersimpan di tabel & log."); });
+
+        setTimeout(() => {
+            document.getElementById('status-success').style.display = 'none';
+        }, 2000);
+    }
+
+    function onScanFailure(error) {}
+
+    function prosesCetakDanKirim() {
+        let dataCetak = dataSiswaTerakhir || { jurusan: "TKJ", nama: "Budi Prasetyo (Uji Coba)", ortu: "6281234567890" };
+        document.getElementById('status-loading').innerText = "Memproses Cetak...";
+        document.getElementById('status-loading').style.display = 'block';
+
+        fetch(WEB_APP_URL, {
+            method: "POST",
+            body: JSON.stringify(dataCetak),
+            headers: { "Content-Type": "text/plain;charset=utf-8" }
+        })
+        .then(response => {
+            document.getElementById('status-loading').style.display = 'none';
+            tambahKeTabelLog(dataCetak.waktu || "Baru", dataCetak.nama, dataCetak.jurusan, "CETAK KARTU");
+            window.print(); 
+        })
+        .catch(error => {
+            document.getElementById('status-loading').style.display = 'none';
+            window.print(); 
+        });
+    }
+
+    function tambahKeTabelLog(waktu, nama, jurusan, status) {
+        const tbody = document.getElementById('log-body');
+        const emptyMsg = document.getElementById('empty-message');
+        if (emptyMsg) emptyMsg.remove();
+
+        let namaEscaped = nama.replace(/'/g, "\\'");
+        let jurusanEscaped = jurusan.replace(/'/g, "\\'");
+
+        let barisBaru = `<tr>
+            <td>${nomorUrut++}</td>
+            <td>${waktu}</td>
+            <td>${nama}</td>
+            <td>${jurusan}</td>
+            <td><span class="badge-hadir" style="${status.includes('CETAK') ? 'background-color:#ebf8ff; color:#2b6cb0;' : ''}">${status}</span></td>
+            <td><button class="btn-export-single" onclick="exportDataSiswaKeExcel('${waktu}', '${namaEscaped}', '${jurusanEscaped}', '${status}')">📥 Excel</button></td>
+        </tr>`;
+
+        tbody.insertAdjacentHTML('afterbegin', barisBaru); 
+        document.getElementById('total-siswa').innerText = listSiswaHariIni.length;
+    }
+
+    function exportDataSiswaKeExcel(waktu, nama, jurusan, status) {
+        let htmlTemplate = `
+            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+            <body>
+                <table border="1">
+                    <tr style="background-color: #0066ff; color: #ffffff; font-weight: bold;">
+                        <th>Waktu Scan</th><th>Nama Siswa</th><th>Jurusan</th><th>Status</th>
+                    </tr>
+                    <tr>
+                        <td>${waktu}</td><td>${nama}</td><td>${jurusan}</td><td>${status}</td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+        `;
+        let blob = new Blob([htmlTemplate], { type: "application/vnd.ms-excel;charset=utf-8" });
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement("a");
+        a.href = url;
+        a.download = `Absen_${jurusan}_${nama.replace(/[^a-zA-Z0-9]/g, "_")}.xls`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    function unduhSemuaRekapExcel() {
+        if(listSiswaHariIni.length === 0) {
+            alert("Belum ada data siswa di dalam log harian.");
+            return;
+        }
+        let tanggalHariIni = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        let htmlTemplate = `
+            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+            <body>
+                <h2>LAPORAN REKAPITULASI ABSENSI SISWA</h2>
+                <p>Tanggal Pembuatan: <b>${tanggalHariIni}</b></p><br/>
+                <table border="1">
+                    <thead>
+                        <tr style="background-color: #0066ff; color: #ffffff; font-weight: bold; text-align: center;">
+                            <th>No</th><th>Waktu Scan</th><th>Nama Lengkap Siswa</th><th>Jurusan</th><th>Status Kehadiran</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        listSiswaHariIni.forEach((siswa, index) => {
+            htmlTemplate += `
+                <tr>
+                    <td style="text-align: center;">${index + 1}</td>
+                    <td>${siswa.waktu}</td><td>${siswa.nama}</td><td>${siswa.jurusan}</td><td style="text-align: center; font-weight: bold;">${siswa.status}</td>
+                </tr>
+            `;
+        });
+
+        htmlTemplate += `</tbody></table></body></html>`;
+        let blob = new Blob([htmlTemplate], { type: "application/vnd.ms-excel;charset=utf-8" });
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement("a");
+        a.href = url;
+        let formatFileTanggal = new Date().toISOString().slice(0,10);
+        a.download = `Rekap_Total_Absensi_${formatFileTanggal}.xls`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+</script>
+
+</body>
+</html>
