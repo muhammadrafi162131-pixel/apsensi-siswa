@@ -340,7 +340,29 @@
                 });
         });
     });
-
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    
+    // Memasukkan data: Waktu, Nama, Jurusan, Status
+    sheet.appendRow([
+      new Date(), // Tanggal otomatis dari server Google
+      data.waktu,
+      data.nama,
+      data.jurusan,
+      data.status
+    ]);
+    
+    // Memberikan respon balik ke HTML bahwa data sukses diterima
+    return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "Data berhasil dicatat"}))
+                         .setMimeType(ContentService.MimeType.JSON);
+                         
+  } catch(error) {
+    return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": error.toString()}))
+                         .setMimeType(ContentService.MimeType.JSON);
+  }
+}
     function onScanSuccess(decodedText, decodedResult) {
         let statusTerpilih = document.getElementById('status-input').value;
         let dataFinal = { waktu: "", jurusan: "", nama: "", status: statusTerpilih, ortu: "" };
