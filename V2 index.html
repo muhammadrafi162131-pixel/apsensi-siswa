@@ -4,12 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistem Terpadu Absensi & Kartu QR</title>
-    
     <script src="https://unpkg.com/html5-qrcode"></script>
-    
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-
     <style>
         * {
             box-sizing: border-box;
@@ -108,24 +103,6 @@
             color: #0066ff;
             background-color: #f8fafc;
         }
-        .input-manual {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #cbd5e0;
-            border-radius: 6px;
-            font-size: 13px;
-            margin-bottom: 8px;
-        }
-        .btn-manual {
-            width: 100%;
-            background-color: #4a5568;
-            color: white;
-            border: none;
-            padding: 10px;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-        }
 
         /* Scanner Area */
         #reader {
@@ -136,12 +113,25 @@
             background: #fafafa;
             padding: 10px;
         }
-        .file-input-wrapper {
-            margin-top: 10px;
-            padding: 10px;
-            background: #edf2f7;
+
+        .upload-box {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #edf2f7;
+            border: 1px solid #cbd5e0;
             border-radius: 6px;
             text-align: center;
+        }
+        .upload-box label {
+            display: block;
+            font-size: 12px;
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+        .upload-box input {
+            font-size: 12px;
+            width: 100%;
         }
         
         /* Status Alerts */
@@ -280,23 +270,16 @@
             </div>
 
             <div class="form-group">
-                <label>Kamera Scanner</label>
+                <label>Kamera Scanner (Live)</label>
                 <div id="reader"></div>
-                
-                <div class="file-input-wrapper">
-                    <label style="font-size:11px; font-weight:bold; color:#4a5568; display:block; margin-bottom:5px;">Atau Upload Gambar/Foto QR:</label>
-                    <input type="file" id="qr-input-file" accept="image/*" style="font-size:11px;">
-                </div>
             </div>
 
-            <div class="form-group" style="margin-top:10px; padding-top:15px; border-top:1px dashed #cbd5e0;">
-                <label>⌨️ Input Manual</label>
-                <input type="text" id="manual-nama" class="input-manual" placeholder="Nama Siswa">
-                <input type="text" id="manual-jurusan" class="input-manual" placeholder="Jurusan / NIS">
-                <button type="button" class="btn-manual" onclick="prosesInputManual()">Kirim Manual</button>
+            <div class="upload-box">
+                <label>📷 Kamera Laptop Macet? Pilih / Upload Foto QR Siswa:</label>
+                <input type="file" id="image-file-input" accept="image/*">
             </div>
 
-            <div id="status-loading" class="status-msg loading">Mengirim data...</div>
+            <div id="status-loading" class="status-msg loading">Mengirim data & WA...</div>
             <div id="status-success" class="status-msg success">Berhasil Dicatat!</div>
         </div>
 
@@ -320,7 +303,7 @@
                     </thead>
                     <tbody id="log-body">
                         <tr id="empty-message">
-                            <td colspan="6" class="empty-row">Belum ada data masuk. Silakan scan kartu.</td>
+                            <td colspan="6" class="empty-row">Belum ada data masuk. Silakan scan atau upload foto QR.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -334,77 +317,42 @@
     </div>
 
 <script>
-    <script>
-    // 1. KITA MATIKAN DULU INITIALISASI FIREBASE AGAR TIDAK CRASH
-    /* 
-    const firebaseConfig = {
-        apiKey: "AIzaSyD-MASUKKAN-API-KEY-ANDA",
-        authDomain: "PROYEK-ANDA.firebaseapp.com",
-        projectId: "PROYEK-ANDA",
-        storageBucket: "PROYEK-ANDA.appspot.com",
-        messagingSenderId: "1234567890",
-        appId: "1:1234567890:web:abcdef123456"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-    */
-
-    // Buat variabel dummy agar fungsi lain tidak error saat mendeteksi 'db'
-    const db = { collection: function() { return { add: function() { return { then: function(cb) { cb({id: "LOKAL"}); return { catch: function() {} }; } } } } } };
-
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby4oGGu1BoicT1NIM2AzUpibSMpFIOPgoDX5Qg7X_z_/exec"; 
-    
-    let nomorUrut = 1;
-    // ... SISA KODE DI BAWAHNYA BIARKAN TETAP SAMA ...
-    // =========================================================================
-    // WAJIB: GANTI DENGAN KREDENSIAL KONFIGURASI FIREBASE PROYEK ANDA SENDIRI
-    // =========================================================================
-    const firebaseConfig = {
-        apiKey: "AIzaSyD-MASUKKAN-API-KEY-ANDA",
-        authDomain: "PROYEK-ANDA.firebaseapp.com",
-        projectId: "PROYEK-ANDA",
-        storageBucket: "PROYEK-ANDA.appspot.com",
-        messagingSenderId: "1234567890",
-        appId: "1:1234567890:web:abcdef123456"
-    };
-
-    // Inisialisasi Firebase & Firestore Database
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby4oGGu1BoicT1NIM2AzUpibSMpFIOPgoDX5Qg7X_z_/exec"; 
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby4oGGu1BoicT1NIM2AzUpibSMpFIOPgoDX5Qg7X_z_/exec";
 
     let nomorUrut = 1;
-    let dataSiswaTerakhir = null; 
-    let listSiswaHariIni = []; 
+    let dataSiswaTerakhir = null;
+    let listSiswaHariIni = [];
+
     let html5QrcodeScanner = null;
 
     document.addEventListener("DOMContentLoaded", function() {
-        // PERBAIKAN: Inisialisasi scanner dibuat lebih ringan agar tidak gampang freeze
+        // Inisialisasi Scanner Kamera Live
         html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-            fps: 15, 
-            qrbox: 250
+            fps: 10, 
+            qrbox: { width: 220, height: 220 },
+            rememberLastUsedCamera: true
         });
         html5QrcodeScanner.render(onScanSuccess, onScanFailure);
 
-        // Handler untuk scan via file foto/gambar QR
-        const fileInput = document.getElementById('qr-input-file');
+        // PROSES PEMBACAAN FILE GAMBAR/FOTO QR CODE KARTU SISWA
+        const fileInput = document.getElementById('image-file-input');
         fileInput.addEventListener('change', e => {
-            if (e.target.files.length == 0) return;
-            const imageFile = e.target.files[0];
+            if (e.target.files.length === 0) return;
+            
+            const fileGambar = e.target.files[0];
             const html5QrCode = new Html5QrCode("reader");
             
-            document.getElementById('status-loading').innerText = "Membaca gambar...";
+            document.getElementById('status-loading').innerText = "Membaca file foto QR...";
             document.getElementById('status-loading').style.display = 'block';
 
-            html5QrCode.scanFile(imageFile, true)
+            html5QrCode.scanFile(fileGambar, true)
                 .then(decodedText => {
                     onScanSuccess(decodedText);
-                    fileInput.value = ""; 
+                    fileInput.value = ""; // bersihkan input file
                 })
                 .catch(err => {
                     document.getElementById('status-loading').style.display = 'none';
-                    alert("QR Code tidak terbaca di gambar tersebut. Pastikan foto fokus dan jelas.");
+                    alert("Gagal membaca QR! Pastikan foto kartu tegak, tidak blur, dan pencahayaan terang.");
                     fileInput.value = "";
                 });
         });
@@ -414,7 +362,7 @@
         let statusTerpilih = document.getElementById('status-input').value;
         let dataFinal = { waktu: "", jurusan: "", nama: "", status: statusTerpilih, ortu: "" };
 
-        document.getElementById('status-loading').innerText = "Menyimpan data...";
+        document.getElementById('status-loading').innerText = "Mengirim data & WA...";
         document.getElementById('status-loading').style.display = 'block';
 
         let waktuSekarang = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + " WIB";
@@ -430,72 +378,20 @@
             dataFinal.nama = decodedText.trim() || "Siswa Tanpa Nama";
         }
 
-        prosesSimpanDanUpdate(dataFinal, statusTerpilih);
-    }
-
-    // Fungsi Input Manual (Pengganti scan jika hardware bermasalah)
-    function prosesInputManual() {
-        let namaInput = document.getElementById('manual-nama').value.trim();
-        let jurusanInput = document.getElementById('manual-jurusan').value.trim();
-        let statusTerpilih = document.getElementById('status-input').value;
-
-        if(!namaInput) {
-            alert("Nama siswa tidak boleh kosong!");
-            return;
-        }
-
-        let waktuSekarang = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + " WIB";
-        let dataFinal = {
-            waktu: waktuSekarang,
-            nama: namaInput,
-            jurusan: jurusanInput || "-",
-            status: statusTerpilih,
-            ortu: ""
-        };
-
-        prosesSimpanDanUpdate(dataFinal, statusTerpilih);
-        
-        // Bersihkan field manual setelah kirim
-        document.getElementById('manual-nama').value = "";
-        document.getElementById('manual-jurusan').value = "";
-    }
-
-    // Fungsi pusat untuk menyimpan ke Firestore dan memperbarui UI secara real-time
-    function prosesSimpanDanUpdate(dataFinal, statusTerpilih) {
-        dataSiswaTerakhir = dataFinal; 
-        listSiswaHariIni.push(dataFinal); 
-
-        // -------------------------------------------------------------
-        // PERBAIKAN: MENYIMPAN DATA ASLI KE CLOUD FIRESTORE (Koleksi "5338")
-        // -------------------------------------------------------------
-        db.collection("5338").add({
-            "No": nomorUrut,
-            "Waktu Scan": dataFinal.waktu,
-            "Nama Siswa": dataFinal.nama,
-            "Jurusan": dataFinal.jurusan,
-            "Status": dataFinal.status,
-            "Aksi": "O"
-        })
-        .then((docRef) => {
-            console.log("Data berhasil dikirim ke Firestore dengan ID:", docRef.id);
-        })
-        .catch((error) => {
-            console.error("Gagal mengirim data ke Firestore:", error);
-        });
-        // -------------------------------------------------------------
+        dataSiswaTerakhir = dataFinal;
+        listSiswaHariIni.push(dataFinal);
 
         tambahKeTabelLog(dataFinal.waktu, dataFinal.nama, dataFinal.jurusan, statusTerpilih);
         document.getElementById('status-loading').style.display = 'none';
         document.getElementById('status-success').style.display = 'block';
 
-        // Mengirimkan data paralel ke Google Sheets backend via Apps Script URL
         fetch(WEB_APP_URL, {
             method: "POST",
             body: JSON.stringify(dataFinal),
             headers: { "Content-Type": "text/plain;charset=utf-8" }
         })
         .then(response => response.json())
-        .catch(error => { console.log("Data tercatat lokal di log tabel harian browser."); });
+        .catch(error => { console.log("Data dikirim ke server sheets."); });
 
         setTimeout(() => {
             document.getElementById('status-success').style.display = 'none';
@@ -517,11 +413,11 @@
         .then(response => {
             document.getElementById('status-loading').style.display = 'none';
             tambahKeTabelLog(dataCetak.waktu || "Baru", dataCetak.nama, dataCetak.jurusan, "CETAK KARTU");
-            window.print(); 
+            window.print();
         })
         .catch(error => {
             document.getElementById('status-loading').style.display = 'none';
-            window.print(); 
+            window.print();
         });
     }
 
@@ -542,7 +438,7 @@
             <td><button class="btn-export-single" onclick="exportDataSiswaKeExcel('${waktu}', '${namaEscaped}', '${jurusanEscaped}', '${status}')">📥 Excel</button></td>
         </tr>`;
 
-        tbody.insertAdjacentHTML('afterbegin', barisBaru); 
+        tbody.insertAdjacentHTML('afterbegin', barisBaru);
         document.getElementById('total-siswa').innerText = listSiswaHariIni.length;
     }
 
