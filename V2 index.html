@@ -6,8 +6,9 @@
     <title>Sistem Terpadu Absensi & Kartu QR</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     
+    <!-- Memuat Firebase App dan Cloud Firestore SDK (v9 Compat) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
     <style>
         * {
@@ -297,23 +298,21 @@
     </div>
 
 <script>
-    // ==========================================
-    // KONFIGURASI FIREBASE
-    // ==========================================
-    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyACx-1N0lEsphorfoyn_Tpq_wIo250YmHw",
-  authDomain: "absensi-siswa-5338c.firebaseapp.com",
-  projectId: "absensi-siswa-5338c",
-  storageBucket: "absensi-siswa-5338c.firebasestorage.app",
-  messagingSenderId: "940090350881",
-  appId: "1:940090350881:web:c4dc02f695aac17609b260",
-  measurementId: "G-3YL55BLTBB"
-};
-    
-    // Inisialisasi Firebase
+    // ========================================================
+    // SILAKAN MASUKKAN KREDENSIAL KONFIGURASI WEB APP FIREBASE ANDA
+    // ========================================================
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT_ID.appspot.com",
+        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+        appId: "YOUR_APP_ID"
+    };
+
+    // Inisialisasi Firebase & Firestore
     firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
+    const db = firebase.firestore();
 
     const WEB_APP_URL = "https://script.google.com/macros/s/AKfycby4oGGu1BoicT1NIM2AzUpibSMpFIOPgoDX5Qg7X_z_/exec"; 
 
@@ -337,7 +336,7 @@ const firebaseConfig = {
         let statusTerpilih = document.getElementById('status-input').value;
         let dataFinal = { waktu: "", jurusan: "", nama: "", status: statusTerpilih, ortu: "" };
 
-        document.getElementById('status-loading').innerText = "Mengirim data ke Database & WA...";
+        document.getElementById('status-loading').innerText = "Mengirim data ke Firestore & WA...";
         document.getElementById('status-loading').style.display = 'block';
 
         let waktuSekarang = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + " WIB";
@@ -356,31 +355,39 @@ const firebaseConfig = {
         dataSiswaTerakhir = dataFinal; 
         listSiswaHariIni.push(dataFinal); 
 
-        // 1. Simpan otomatis ke Firebase Realtime Database
-        let formatTanggalKey = new Date().toISOString().slice(0,10); // Menghasilkan format YYYY-MM-DD
-        
-        // Data disimpan di bawah node 'absensi/YYYY-MM-DD' menggunakan push() agar generate unique key otomatis
-        database.ref('absensi/' + formatTanggalKey).push(dataFinal)
-        .then(() => {
-            console.log("Berhasil tersimpan di Firebase!");
+        // ----------------------------------------------------
+        // LOGIKA PENYIMPANAN OTOMATIS KE CLOUD FIRESTORE
+        // ----------------------------------------------------
+        // Menyesuaikan struktur visual dari Screenshot: Collection '5338'
+        // Setiap dokumen baru akan menggunakan ID auto-generated dengan fungsi add()
+        db.collection("5338").add({
+            "No": nomorUrut,
+            "Waktu Scan": dataFinal.waktu,
+            "Nama Siswa": dataFinal.nama,
+            "Jurusan": dataFinal.jurusan,
+            "Status": dataFinal.status,
+            "Aksi": "O" // Sesuai field penampung placeholder pada screenshot Anda
+        })
+        .then((docRef) => {
+            console.log("Sukses menyimpan ke Firestore dengan ID Dokumen: ", docRef.id);
         })
         .catch((error) => {
-            console.error("Gagal menyimpan ke Firebase: ", error);
+            console.error("Gagal mengirim ke Firestore: ", error);
         });
+        // ----------------------------------------------------
 
-        // 2. Tampilkan di Tabel Log Web UI
         tambahKeTabelLog(dataFinal.waktu, dataFinal.nama, dataFinal.jurusan, statusTerpilih);
         document.getElementById('status-loading').style.display = 'none';
         document.getElementById('status-success').style.display = 'block';
 
-        // 3. Mengirimkan objek ke Google Apps Script backend lama (tetap dipertahankan)
+        // Mengirimkan objek dataFinal ke Google Apps Script backend lama (tetap berjalan paralel)
         fetch(WEB_APP_URL, {
             method: "POST",
             body: JSON.stringify(dataFinal),
             headers: { "Content-Type": "text/plain;charset=utf-8" }
         })
         .then(response => response.json())
-        .catch(error => { console.log("Tersimpan di tabel & log."); });
+        .catch(error => { console.log("Tersimpan di tabel harian."); });
 
         setTimeout(() => {
             document.getElementById('status-success').style.display = 'none';
@@ -431,6 +438,7 @@ const firebaseConfig = {
         document.getElementById('total-siswa').innerText = listSiswaHariIni.length;
     }
 
+    // Fungsi export data ke Excel tunggal & rekap di bawah ini tetap dipertahankan
     function exportDataSiswaKeExcel(waktu, nama, jurusan, status) {
         let htmlTemplate = `
             <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
