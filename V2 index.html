@@ -358,16 +358,13 @@
 
     let html5QrcodeScanner = null;
 
-    document.addEventListener("DOMContentLoaded", function() {
-        // Inisialisasi Scanner Live
-        html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-            fps: 10, 
-            qrbox: { width: 200, height: 200 },
-            rememberLastUsedCamera: true,
-            supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
-        });
-        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
-
+  document.addEventListener("DOMContentLoaded", function() {
+    // Menggunakan inisialisasi standar yang langsung memanggil list kamera tanpa memaksakan memori pelacakan terakhir
+    html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+        fps: 10, 
+        qrbox: 250 
+    });
+    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
         // Handler untuk scan lewat file gambar
         const fileInput = document.getElementById('qr-input-file');
         fileInput.addEventListener('change', e => {
